@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.PoSplitAsnMapper">
+
+    <!-- 查询订单明细行 -->
+    <select id="findDetailRow" resultType="map">
+        SELECT id, order_id, need_number, need_date, parts_number, parts_name
+        FROM tb_purchase_parts_order_detail
+        WHERE id = #{detailId} AND order_id = #{orderId} AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 检查明细是否有已发货记录 -->
+    <select id="existsPositiveShippedForDetail" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM tb_srm_po_split_line
+        WHERE detail_id = #{detailId} AND shipped_qty > 0
+    </select>
+
+    <!-- 删除发货数量为0的拆分行 -->
+    <delete id="deleteSplitsWithZeroShippedByDetail">
+        DELETE FROM tb_srm_po_split_line WHERE detail_id = #{detailId} AND shipped_qty = 0
+    </delete>
+
+    <!-- 插入拆分行 -->
+    <insert id="insertSplitLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_po_split_line (order_id, detail_id, split_qty, committed_date, status, shipped_qty, received_qty)
+        VALUES (#{orderId}, #{detailId}, #{splitQty}, #{committedDate}, #{status}, 0, 0)
+    </insert>
+
+    <!-- 查询拆分行列表（按订单） -->
+    <select id="listSplitLinesByOrder" resultType="map">
+        SELECT sl.id AS split_line_id,
+               sl.order_id,
+               sl.detail_id,
+               sl.split_qty,
+               sl.committed_date,
+               sl.status,
+               sl.shipped_qty,
+               sl.received_qty,
+               (sl.split_qty - sl.shipped_qty) AS remaining_ship_qty,
+               d.parts_number,
+               d.parts_name,
+               d.need_number AS line_need_qty
+        FROM tb_srm_po_split_line sl
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = sl.detail_id AND IFNULL(d.is_deleted, 0) = 0
+        WHERE sl.order_id = #{orderId}
+        ORDER BY sl.detail_id ASC, sl.id ASC
+    </select>
+
+    <!-- 锁定拆分行（FOR UPDATE） -->
+    <select id="lockSplitLine" resultType="map">
+        SELECT * FROM tb_srm_po_split_line WHERE id = #{splitLineId} FOR UPDATE
+    </select>
+
+    <!-- 增加拆分行已发货数量 -->
+    <update id="addSplitShippedQty">
+        UPDATE tb_srm_po_split_line SET shipped_qty = shipped_qty + #{delta} WHERE id = #{splitLineId}
+    </update>
+
+    <!-- 增加拆分行已收货数量 -->
+    <update id="addSplitReceivedQty">
+        UPDATE tb_srm_po_split_line SET received_qty = received_qty + #{delta} WHERE id = #{splitLineId}
+    </update>
+
+    <!-- 更新拆分行状态 -->
+    <update id="updateSplitStatus">
+        UPDATE tb_srm_po_split_line SET status = #{status} WHERE id = #{splitLineId}
+    </update>
+
+    <!-- 查询拆分行状态用于刷新 -->
+    <select id="findSplitLineForRefresh" resultType="map">
+        SELECT split_qty, shipped_qty, received_qty FROM tb_srm_po_split_line WHERE id = #{splitLineId}
+    </select>
+
+    <!-- 插入 ASN 行 -->
+    <insert id="insertAsnLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_asn_line (asn_id, split_line_id, shipped_qty, received_qty, receipt_time)
+        VALUES (#{asnId}, #{splitLineId}, #{shippedQty}, 0, NULL)
+    </insert>
+
+    <!-- 根据 ID 查询 ASN 行 -->
+    <select id="findAsnLineById" resultType="map">
+        SELECT * FROM tb_srm_asn_line WHERE id = #{asnLineId}
+    </select>
+
+    <!-- 锁定 ASN 行（FOR UPDATE） -->
+    <select id="lockAsnLine" resultType="map">
+        SELECT * FROM tb_srm_asn_line WHERE id = #{asnLineId} FOR UPDATE
+    </select>
+
+    <!-- 增加 ASN 行已收货数量 -->
+    <update id="addAsnLineReceived">
+        UPDATE tb_srm_asn_line
+        SET received_qty = received_qty + #{delta}, receipt_time = #{receiptTime}
+        WHERE id = #{asnLineId}
+    </update>
+
+    <!-- 查询 ASN 行列表 -->
+    <select id="listAsnLinesByAsnId" resultType="map">
+        SELECT al.id AS asn_line_id,
+               al.asn_id,
+               al.split_line_id,
+               al.shipped_qty,
+               al.received_qty,
+               al.receipt_time
+        FROM tb_srm_asn_line al
+        WHERE al.asn_id = #{asnId}
+        ORDER BY al.id ASC
+    </select>
+
+    <!-- 根据拆分行 ID 查询订单 ID -->
+    <select id="findOrderIdBySplitLineId" resultType="long">
+        SELECT order_id FROM tb_srm_po_split_line WHERE id = #{splitLineId}
+    </select>
+
+</mapper>

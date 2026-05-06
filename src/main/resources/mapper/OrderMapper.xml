@@ -1,0 +1,1270 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.OrderMapper">
+
+    <!-- 查询订单列表 -->
+    <select id="listOrderHeaders" resultType="map">
+        SELECT tb_purchase_parts_order.*,
+               DATE_FORMAT(tb_purchase_parts_order.create_time, '%Y-%m-%d') AS order_date,
+               COALESCE((SELECT SUM(d.need_number) FROM tb_purchase_parts_order_detail d WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0), 0) AS total_need_qty,
+               (
+                   COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = tb_purchase_parts_order.id AND IFNULL(a.is_deleted, 0) = 0), 0)
+                   +
+                   COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
+                       INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
+                       INNER JOIN tb_purchase_parts_order_detail d ON sl.detail_id = d.id
+                       WHERE d.order_id = tb_purchase_parts_order.id), 0)
+               ) AS total_shipped_qty,
+               s.SUPPLIER_NAME AS supplier_name,
+               <!-- 根据订单详情状态计算订单状态 -->
+               (
+                   SELECT CASE
+                       WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
+                       WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
+                       WHEN SUM(CASE WHEN d.supplier_order_status IN (25, 30) THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) > 0 THEN 30
+                       ELSE 21
+                   END
+                   FROM tb_purchase_parts_order_detail d
+                   WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0
+               ) AS supplier_order_status,
+               <!-- 交付状态: 0未交付, 25部分交付, 30已交付 -->
+               (
+                   SELECT CASE
+                       WHEN NOT EXISTS (SELECT 1 FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = tb_purchase_parts_order.id AND a.status = 'SHIPPED' AND IFNULL(a.is_deleted, 0) = 0) THEN 0
+                       WHEN (SELECT COUNT(DISTINCT d2.id) FROM tb_purchase_parts_order_detail d2 WHERE d2.order_id = tb_purchase_parts_order.id AND IFNULL(d2.is_deleted, 0) = 0) =
+                            (SELECT COUNT(DISTINCT d2.id) FROM tb_purchase_parts_order_detail d2 INNER JOIN tb_srm_asn a ON a.order_detail_id = d2.id INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE d2.order_id = tb_purchase_parts_order.id AND a.status = 'SHIPPED' AND IFNULL(a.is_deleted, 0) = 0) THEN 30
+                       ELSE 25
+                   END
+               ) AS delivery_status
+        FROM tb_purchase_parts_order
+        LEFT JOIN tb_contract_supplier s ON tb_purchase_parts_order.supplier_id = s.ID
+        WHERE IFNULL(tb_purchase_parts_order.is_deleted, 0) = 0
+          AND tb_purchase_parts_order.order_status = 1
+        <if test="supplierId != null">
+          AND tb_purchase_parts_order.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    tb_purchase_parts_order.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="supplierOrderStatus != null and supplierOrderStatus.size() > 0">
+            AND (
+                SELECT CASE
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
+                    WHEN SUM(CASE WHEN d.supplier_order_status IN (25, 30) THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) > 0 THEN 30
+                    ELSE 21
+                END
+                FROM tb_purchase_parts_order_detail d
+                WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0
+            ) IN
+            <foreach collection="supplierOrderStatus" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        </if>
+        <if test="supplierName != null and supplierName != ''">
+            AND s.SUPPLIER_NAME LIKE CONCAT('%', #{supplierName}, '%')
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND tb_purchase_parts_order.order_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND tb_purchase_parts_order.order_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        <if test="sortField != null and sortField != '' and sortOrder != null and sortOrder != ''">
+            ORDER BY
+            <choose>
+                <when test="sortField == 'order_no'">tb_purchase_parts_order.order_no ${sortOrder}</when>
+                <when test="sortField == 'order_date'">tb_purchase_parts_order.create_time ${sortOrder}</when>
+                <when test="sortField == 'supplier_name'">s.SUPPLIER_NAME ${sortOrder}</when>
+                <otherwise>tb_purchase_parts_order.id DESC</otherwise>
+            </choose>
+        </if>
+        <if test="sortField == null or sortField == '' or sortOrder == null or sortOrder == ''">
+        ORDER BY tb_purchase_parts_order.id DESC
+        </if>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计订单数量 -->
+    <select id="countOrderHeaders" resultType="long">
+        SELECT COUNT(*) FROM tb_purchase_parts_order
+        LEFT JOIN tb_contract_supplier s ON tb_purchase_parts_order.supplier_id = s.ID
+        WHERE IFNULL(tb_purchase_parts_order.is_deleted, 0) = 0
+          AND tb_purchase_parts_order.order_status = 1
+        <if test="supplierId != null">
+          AND tb_purchase_parts_order.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    tb_purchase_parts_order.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="supplierOrderStatus != null and supplierOrderStatus.size() > 0">
+            AND (
+                SELECT CASE
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
+                    WHEN SUM(CASE WHEN d.supplier_order_status IN (25, 30) THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) > 0 THEN 30
+                    ELSE 21
+                END
+                FROM tb_purchase_parts_order_detail d
+                WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0
+            ) IN
+            <foreach collection="supplierOrderStatus" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        </if>
+        <if test="supplierName != null and supplierName != ''">
+            AND s.SUPPLIER_NAME LIKE CONCAT('%', #{supplierName}, '%')
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND tb_purchase_parts_order.order_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND tb_purchase_parts_order.order_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 查询订单汇总统计 -->
+    <select id="getOrderSummaryStats" resultType="map">
+        SELECT
+            COUNT(DISTINCT o.id) AS order_count,
+            COALESCE(SUM(d.need_number), 0) AS total_need_qty,
+            COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0) AS pending_confirm_qty,
+            COALESCE(SUM(
+                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0)
+                +
+                COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
+                    INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
+                    INNER JOIN tb_purchase_parts_order_detail dd ON sl.detail_id = dd.id
+                    WHERE dd.order_id = o.id), 0)
+            ), 0) AS total_shipped_qty,
+            COALESCE(SUM(
+                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED'), 0)
+            ), 0) AS pending_ship_qty,
+            COALESCE(SUM(d.need_number), 0)
+            - COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0)
+            - COALESCE(SUM(
+                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0)
+                +
+                COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
+                    INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
+                    INNER JOIN tb_purchase_parts_order_detail dd ON sl.detail_id = dd.id
+                    WHERE dd.order_id = o.id), 0)
+            ), 0)
+            - COALESCE(SUM(
+                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED'), 0)
+            ), 0) AS remaining_qty
+        FROM tb_purchase_parts_order o
+        INNER JOIN tb_purchase_parts_order_detail d ON o.id = d.order_id
+        WHERE IFNULL(o.is_deleted, 0) = 0
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND o.order_status = 1
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND (
+                <foreach collection="partsNumber" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="supplierOrderStatus != null and supplierOrderStatus.size() > 0">
+            AND (
+                SELECT CASE
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
+                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
+                    WHEN SUM(CASE WHEN d.supplier_order_status IN (25, 30) THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) > 0 THEN 30
+                    ELSE 21
+                END
+                FROM tb_purchase_parts_order_detail dd
+                WHERE dd.order_id = o.id AND IFNULL(dd.is_deleted, 0) = 0
+            ) IN
+            <foreach collection="supplierOrderStatus" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.order_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.order_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 查询订单详情 -->
+    <select id="getOrderById" resultType="map">
+        SELECT *,
+               DATE_FORMAT(create_time, '%Y-%m-%d') AS order_date,
+               plan_user_name AS plan_user_name
+        FROM tb_purchase_parts_order
+        WHERE id = #{orderId}
+          AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询订单详情行 -->
+    <select id="getOrderDetails" resultType="map">
+        SELECT
+            d.*,
+            d.supplier_order_status,
+            o.order_no,
+            o.address AS ship_to_address,
+            o.take_over_connect AS take_over_connect,
+            o.connect_number AS connect_number,
+            d.storage_name AS storage_name,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0) AS shipped_qty,
+            d.need_number - COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0) AS remaining_qty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE d.order_id = #{orderId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+        ORDER BY d.id ASC
+    </select>
+
+    <!-- 根据订单详情ID查询订单详情行 -->
+    <select id="getOrderDetailById" resultType="map">
+        SELECT 
+            d.id AS order_detail_id,
+            d.order_id,
+            d.id AS order_line_no,
+            d.parts_number AS parts_no,
+            d.parts_name,
+            d.need_number AS order_qty,
+            d.need_number AS confirmed_qty,
+            0 AS shipped_qty,
+            d.need_number - 0 AS remaining_qty,
+            d.need_date,
+            o.supplier_id,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE d.id = #{orderDetailId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+    </select>
+
+    <!-- 根据订单号查询订单详情行 -->
+    <select id="getOrderDetailsByOrderNo" resultType="map">
+        SELECT
+            d.id AS order_detail_id,
+            d.order_id,
+            d.parts_number,
+            d.parts_name,
+            d.need_number,
+            d.need_date,
+            d.supplier_order_status,
+            o.order_no,
+            o.address AS ship_to_address,
+            o.take_over_connect AS take_over_connect,
+            o.connect_number AS connect_number,
+            d.storage_name AS storage_name,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.ship_qty IS NOT NULL), 0) AS shipped_qty,
+            d.need_number - (
+                COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+                + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.ship_qty IS NOT NULL), 0)
+            ) AS remaining_qty,
+            COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.ship_qty IS NOT NULL), 0) AS created_asn_qty,
+            COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS expected_receipt_qty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.order_no = #{orderNo}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+        ORDER BY d.id ASC
+    </select>
+
+    <!-- 查询供应商的订单 - 合并订单头和明细 -->
+    <select id="listOrderDetails" resultType="map">
+        SELECT
+            d.id AS id,
+            d.order_id,
+            o.order_no,
+            pm.EXTERNAL_PART_NO AS parts_no,
+            pm.CHINESE_NAME AS parts_name,
+            s.SUPPLIER_NAME AS supplier_name,
+            d.need_number AS order_qty,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS shipped_qty,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
+            d.need_number
+            - (COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0))
+            - (COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0)) AS remaining_qty,
+            d.need_date,
+            o.address AS ship_to_address,
+            d.storage_name AS ship_to_plant,
+            d.storage_name AS storage_name,
+            d.supplier_order_status,
+            DATE_FORMAT(o.create_time, '%Y-%m-%d') AS order_date
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        LEFT JOIN tb_contract_supplier s ON o.supplier_id = s.ID
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_status = 1
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND (
+                <foreach collection="partsNumber" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="supplierOrderStatus != null">
+            AND d.supplier_order_status = #{supplierOrderStatus}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        <if test="sortField != null and sortField != '' and sortOrder != null and sortOrder != ''">
+            ORDER BY
+            <choose>
+                <when test="sortField == 'parts_no'">pm.EXTERNAL_PART_NO ${sortOrder}</when>
+                <when test="sortField == 'order_no'">o.order_no ${sortOrder}</when>
+                <when test="sortField == 'need_date'">d.need_date ${sortOrder}</when>
+                <when test="sortField == 'order_date'">o.create_time ${sortOrder}</when>
+                <otherwise>o.create_time DESC, o.order_no DESC, d.id ASC</otherwise>
+            </choose>
+        </if>
+        <if test="sortField == null or sortField == '' or sortOrder == null or sortOrder == ''">
+        ORDER BY o.create_time DESC, o.order_no DESC, d.id ASC
+        </if>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计合并查询的记录数 -->
+    <select id="countOrderDetails" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_status = 1
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND (
+                <foreach collection="partsNumber" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="supplierOrderStatus != null">
+            AND d.supplier_order_status = #{supplierOrderStatus}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 根据订单ID查询供应商ID -->
+    <select id="findSupplierIdByOrderId" resultType="long">
+        SELECT supplier_id FROM tb_purchase_parts_order
+        WHERE id = #{orderId}
+          AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 更新订单状态 -->
+    <update id="updatesupplierOrderStatus">
+        UPDATE tb_purchase_parts_order
+        SET supplier_order_status = #{status},
+            update_time = NOW()
+        WHERE id = #{orderId}
+          AND supplier_id = #{supplierId}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 更新订单详情状态（按订单ID） -->
+    <update id="updateOrderDetailStatus">
+        UPDATE tb_purchase_parts_order_detail
+        SET supplier_order_status = #{status},
+            update_time = NOW()
+        WHERE order_id = #{orderId}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 更新订单详情状态（按详情ID） -->
+    <update id="updateOrderDetailStatusById">
+        UPDATE tb_purchase_parts_order_detail
+        SET supplier_order_status = #{status},
+            update_time = NOW()
+        WHERE id = #{orderDetailId}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 更新订单详情的已发货数量 -->
+    <update id="updateOrderDetailShippedQty">
+        UPDATE tb_srm_asn
+        SET ship_qty = #{shippedQty}
+        WHERE order_detail_id = #{orderDetailId}
+    </update>
+
+    <!-- 只更新订单状态 -->
+    <update id="updatesupplierOrderStatusOnly">
+        UPDATE tb_purchase_parts_order
+        SET supplier_order_status = #{status},
+            update_time = NOW()
+        WHERE id = #{orderId}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 查询订单详情行的已发运数量 -->
+    <select id="getOrderDetailShippedQty" resultType="int">
+        SELECT COALESCE(SUM(ship_qty), 0)
+        FROM tb_srm_asn
+        WHERE order_detail_id = #{orderDetailId} and IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 检查订单是否全部属于该供应商 -->
+    <select id="countOrdersBySupplier" resultType="int">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order
+        WHERE supplier_id = #{supplierId}
+          AND id IN
+        <foreach collection="orderIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询待发货订单列表 -->
+    <select id="listPendingShipmentOrderDetails" resultType="map">
+        SELECT
+            d.id AS order_detail_id,
+            d.order_id,
+            o.order_no,
+            pm.EXTERNAL_PART_NO AS parts_no,
+            pm.CHINESE_NAME AS parts_name,
+            s.SUPPLIER_NAME AS supplier_name,
+            d.need_number AS order_qty,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS shipped_qty,
+            COALESCE((SELECT SUM(p.plan_quantity) FROM tb_delivery_plan p WHERE p.order_detail_id = d.id), 0) AS planned_qty,
+            d.need_number
+            - COALESCE((SELECT SUM(p.plan_quantity) FROM tb_delivery_plan p WHERE p.order_detail_id = d.id), 0) AS remaining_quantity,
+            d.need_date,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            d.supplier_order_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        LEFT JOIN tb_contract_supplier s ON o.supplier_id = s.ID
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND d.supplier_order_status != 0
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo != ''">
+            AND o.order_no LIKE CONCAT('%', #{orderNo}, '%')
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND (
+                <foreach collection="partsNumber" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        HAVING remaining_quantity > 0
+        ORDER BY o.create_time DESC, o.order_no DESC, d.id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计待发货订单数量 -->
+    <select id="countPendingShipmentOrderDetails" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND d.supplier_order_status != 0
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo != ''">
+            AND o.order_no LIKE CONCAT('%', #{orderNo}, '%')
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND (
+                <foreach collection="partsNumber" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 查询销售预测列表 -->
+    <select id="listSalesForecast" resultType="map">
+        SELECT 
+            d.parts_number AS parts_no,
+            d.parts_name,
+            DATE_FORMAT(o.need_date, '%Y-%m') AS month,
+            SUM(d.need_number) AS forecast_qty,
+            o.storage_name AS plant
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(o.need_date, '%Y-%m'), o.storage_name
+        ORDER BY d.parts_number, month
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计销售预测数量 -->
+    <select id="countSalesForecast" resultType="long">
+        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(o.need_date, '%Y-%m')))
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+    </select>
+
+    <!-- 查询采购计划列表 -->
+    <select id="listPurchasePlan" resultType="map">
+        SELECT 
+            d.parts_number AS parts_no,
+            d.parts_name,
+            DATE_FORMAT(o.need_date, '%Y-%m') AS month,
+            SUM(d.need_number) AS plan_qty,
+            o.storage_name AS plant,
+            'pending' AS feedback_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="feedbackStatus != null and feedbackStatus != ''">
+            AND 'pending' = #{feedbackStatus}
+        </if>
+        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(o.need_date, '%Y-%m'), o.storage_name
+        ORDER BY d.parts_number, month
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计采购计划数量 -->
+    <select id="countPurchasePlan" resultType="long">
+        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(o.need_date, '%Y-%m')))
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="feedbackStatus != null and feedbackStatus != ''">
+            AND 'pending' = #{feedbackStatus}
+        </if>
+    </select>
+
+    <!-- 查询 JIT 订单列表 -->
+    <select id="listJitOrders" resultType="map">
+        SELECT 
+            d.id AS order_detail_id,
+            d.order_id,
+            o.order_no,
+            d.parts_number AS parts_no,
+            d.parts_name,
+            d.need_number AS order_qty,
+            0 AS shipped_qty,
+            d.need_number - 0 AS remaining_qty,
+            d.need_date,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            o.supplier_order_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'JIT'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        ORDER BY o.create_time DESC, o.order_no DESC, d.id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计 JIT 订单数量 -->
+    <select id="countJitOrders" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'JIT'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 查询委外加工订单列表 -->
+    <select id="listOutsourcingOrders" resultType="map">
+        SELECT 
+            d.id AS order_detail_id,
+            d.order_id,
+            o.order_no,
+            d.parts_number AS parts_no,
+            d.parts_name,
+            d.need_number AS order_qty,
+            0 AS shipped_qty,
+            d.need_number - 0 AS remaining_qty,
+            d.need_date,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            o.supplier_order_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'OUTSOURCING'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="supplierOrderStatus != null">
+            AND o.supplier_order_status = #{supplierOrderStatus}
+        </if>
+        ORDER BY o.create_time DESC, o.order_no DESC, d.id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计委外加工订单数量 -->
+    <select id="countOutsourcingOrders" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'OUTSOURCING'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="supplierOrderStatus != null">
+            AND o.supplier_order_status = #{supplierOrderStatus}
+        </if>
+    </select>
+
+    <!-- 查询 ASSR 订单列表 -->
+    <select id="listAssrOrders" resultType="map">
+        SELECT 
+            d.id AS order_detail_id,
+            d.order_id,
+            o.order_no,
+            d.parts_number AS parts_no,
+            d.parts_name,
+            d.need_number AS order_qty,
+            0 AS shipped_qty,
+            d.need_number - 0 AS remaining_qty,
+            o.need_date,
+            'high' AS urgency_level,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            o.supplier_order_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'ASSR'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="urgencyLevel != null and urgencyLevel != ''">
+            AND 'high' = #{urgencyLevel}
+        </if>
+        ORDER BY o.need_date ASC, o.order_no DESC, d.id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计 ASSR 订单数量 -->
+    <select id="countAssrOrders" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.order_type = 'ASSR'
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND o.order_no IN
+            <foreach collection="orderNo" item="no" open="(" separator="," close=")">
+                #{no}
+            </foreach>
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="urgencyLevel != null and urgencyLevel != ''">
+            AND 'high' = #{urgencyLevel}
+        </if>
+    </select>
+
+    <!-- 查询经销商历史采购需求列表 -->
+    <select id="listDealerHistory" resultType="map">
+        SELECT 
+            d.parts_number,
+            d.parts_name,
+            DATE_FORMAT(o.need_date, '%Y-%m') AS month,
+            'north' AS region,
+            SUM(d.need_number) AS purchase_qty,
+            '北京经销商' AS dealer_name,
+            'D001' AS dealer_code,
+            '' AS remark
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="region != null and region != ''">
+            AND 'north' = #{region}
+        </if>
+        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(o.need_date, '%Y-%m')
+        ORDER BY d.parts_number, month
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计经销商历史采购需求数量 -->
+    <select id="countDealerHistory" resultType="long">
+        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(o.need_date, '%Y-%m')))
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE o.supplier_id = #{supplierId}
+          AND IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="region != null and region != ''">
+            AND 'north' = #{region}
+        </if>
+    </select>
+
+    <!-- 获取历史采购需求数据 -->
+    <select id="getHistoricalDemands" resultType="map">
+        SELECT 
+            od.parts_number AS partsNumber,
+            o.address AS demandFactory,
+            od.need_number AS demandQty,
+            o.order_no AS orderNo,
+            od.id AS orderLineNo,
+            DATE_FORMAT(o.create_time, '%Y-%m-%d') AS purchaseDate
+        FROM tb_purchase_parts_order_detail od
+        INNER JOIN tb_purchase_parts_order o ON od.order_id = o.id
+        WHERE IFNULL(od.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="partsNumber != null and partsNumber != ''">
+            AND od.parts_number = #{partsNumber}
+        </if>
+        <if test="demandFactory != null and demandFactory != ''">
+            AND o.address LIKE CONCAT('%', #{demandFactory}, '%')
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        ORDER BY o.create_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计历史采购需求数据数量 -->
+    <select id="countHistoricalDemands" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_purchase_parts_order_detail od
+        INNER JOIN tb_purchase_parts_order o ON od.order_id = o.id
+        WHERE IFNULL(od.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="partsNumber != null and partsNumber != ''">
+            AND od.parts_number = #{partsNumber}
+        </if>
+        <if test="demandFactory != null and demandFactory != ''">
+            AND o.address LIKE CONCAT('%', #{demandFactory}, '%')
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </select>
+
+    <!-- 历史需求分析 - 按月/年统计订单数量 -->
+    <select id="analyzeHistoricalDemands" resultType="map">
+        SELECT 
+            d.parts_number AS parts_number,
+            d.parts_name AS parts_name,
+            o.storage_name AS demand_factory,
+            <choose>
+                <when test="granularity == 'month'">
+                    DATE_FORMAT(o.create_time, '%Y-%m') AS time_period
+                </when>
+                <when test="granularity == 'year'">
+                    DATE_FORMAT(o.create_time, '%Y') AS time_period
+                </when>
+                <otherwise>
+                    DATE_FORMAT(o.create_time, '%Y-%m') AS time_period
+                </otherwise>
+            </choose>,
+            COUNT(DISTINCT o.id) AS order_count,
+            SUM(d.need_number) AS total_qty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        <if test="demandFactories != null and demandFactories.size() > 0">
+            AND o.storage_name IN
+            <foreach collection="demandFactories" item="factory" open="(" separator="," close=")">
+                #{factory}
+            </foreach>
+        </if>
+        <if test="partsNumbers != null and partsNumbers.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumbers" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        GROUP BY d.parts_number, d.parts_name, o.storage_name,
+        <choose>
+            <when test="granularity == 'month'">
+                DATE_FORMAT(o.create_time, '%Y-%m')
+            </when>
+            <when test="granularity == 'year'">
+                DATE_FORMAT(o.create_time, '%Y')
+            </when>
+            <otherwise>
+                DATE_FORMAT(o.create_time, '%Y-%m')
+            </otherwise>
+        </choose>
+        ORDER BY d.parts_number, time_period
+    </select>
+
+    <!-- 获取时间标签 -->
+    <select id="getTimeLabels" resultType="string">
+        <choose>
+            <when test="granularity == 'month'">
+                SELECT DISTINCT DATE_FORMAT(create_time, '%Y-%m') AS time_label
+                FROM tb_purchase_parts_order
+                WHERE IFNULL(is_deleted, 0) = 0
+                <if test="startDate != null and startDate != ''">
+                    AND create_time >= CONCAT(#{startDate}, ' 00:00:00')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+                </if>
+                ORDER BY time_label
+            </when>
+            <when test="granularity == 'year'">
+                SELECT DISTINCT DATE_FORMAT(create_time, '%Y') AS time_label
+                FROM tb_purchase_parts_order
+                WHERE IFNULL(is_deleted, 0) = 0
+                <if test="startDate != null and startDate != ''">
+                    AND create_time >= CONCAT(#{startDate}, ' 00:00:00')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+                </if>
+                ORDER BY time_label
+            </when>
+            <otherwise>
+                SELECT DISTINCT DATE_FORMAT(create_time, '%Y-%m') AS time_label
+                FROM tb_purchase_parts_order
+                WHERE IFNULL(is_deleted, 0) = 0
+                <if test="startDate != null and startDate != ''">
+                    AND create_time >= CONCAT(#{startDate}, ' 00:00:00')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+                </if>
+                ORDER BY time_label
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 计算订单的总需求数量 -->
+    <select id="getOrderTotalNeedQuantity" resultType="int">
+        SELECT COALESCE(SUM(need_number), 0)
+        FROM tb_purchase_parts_order_detail
+        WHERE order_id = #{orderId}
+          AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 计算订单相关的所有ASN的ship_qty总和（包含直接创建和按拆分行创建两种方式） -->
+    <select id="getOrderTotalShippedQuantity" resultType="int">
+        SELECT
+            COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = #{orderId} AND IFNULL(a.is_deleted, 0) = 0), 0)
+            +
+            COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
+                INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
+                INNER JOIN tb_purchase_parts_order_detail d ON sl.detail_id = d.id
+                WHERE d.order_id = #{orderId}), 0)
+    </select>
+
+    <!-- ============ 供应商历史模块 SQL ============ -->
+
+    <!-- 供应商历史需求分析 - 按月/年统计订单数量（基于need_date） -->
+    <select id="analyzeSupplierHistory" resultType="map">
+        SELECT
+            pm.EXTERNAL_PART_NO AS parts_number,
+            pm.CHINESE_NAME AS parts_name,
+            o.storage_name AS demand_factory,
+            <choose>
+                <when test="granularity == 'month'">
+                    DATE_FORMAT(d.need_date, '%Y-%m')
+                </when>
+                <when test="granularity == 'year'">
+                    DATE_FORMAT(d.need_date, '%Y')
+                </when>
+                <otherwise>
+                    DATE_FORMAT(d.need_date, '%Y-%m')
+                </otherwise>
+            </choose>
+            AS time_key,
+            COUNT(DISTINCT o.id) AS order_count,
+            SUM(d.need_number) AS total_qty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.supplier_order_status != 0  <!-- 只统计已确认的订单 -->
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND d.need_date &lt;= LAST_DAY(CONCAT(#{endDate}, '-01'))
+        </if>
+        <if test="demandFactories != null and demandFactories.size() > 0">
+            AND o.storage_name IN
+            <foreach collection="demandFactories" item="factory" open="(" separator="," close=")">
+                #{factory}
+            </foreach>
+        </if>
+        <if test="partsNumbers != null and partsNumbers.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumbers" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        GROUP BY pm.EXTERNAL_PART_NO, pm.CHINESE_NAME, o.storage_name,
+        <choose>
+            <when test="granularity == 'month'">
+                DATE_FORMAT(d.need_date, '%Y-%m')
+            </when>
+            <when test="granularity == 'year'">
+                DATE_FORMAT(d.need_date, '%Y')
+            </when>
+            <otherwise>
+                DATE_FORMAT(d.need_date, '%Y-%m')
+            </otherwise>
+        </choose>
+        ORDER BY pm.EXTERNAL_PART_NO, time_key
+    </select>
+
+    <!-- 供应商历史下钻明细查询 -->
+    <select id="getSupplierHistoryDrillDown" resultType="map">
+        SELECT
+            o.order_no AS orderNo,
+            d.id AS orderLineNo,
+            pm.EXTERNAL_PART_NO AS partsNumber,
+            pm.CHINESE_NAME AS partsName,
+            o.storage_name AS demandFactory,
+            DATE_FORMAT(d.need_date, '%Y-%m-%d') AS purchaseDate,
+            d.need_number AS demandQty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.supplier_order_status = 20  <!-- 只统计已确认的订单 -->
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="partsNumber != null and partsNumber != ''">
+            AND d.parts_number = #{partsNumber}
+        </if>
+        <if test="demandFactory != null and demandFactory != ''">
+            AND o.storage_name = #{demandFactory}
+        </if>
+        <if test="timeKey != null and timeKey != '' and granularity == 'month'">
+            AND DATE_FORMAT(d.need_date, '%Y-%m') = #{timeKey}
+        </if>
+        <if test="timeKey != null and timeKey != '' and granularity == 'year'">
+            AND DATE_FORMAT(d.need_date, '%Y') = #{timeKey}
+        </if>
+        ORDER BY d.need_date DESC, o.order_no DESC, d.id ASC
+    </select>
+
+    <!-- 获取供应商历史时间标签（按供应商过滤，基于need_date） -->
+    <select id="getSupplierHistoryTimeLabels" resultType="string">
+        <choose>
+            <when test="granularity == 'month'">
+                SELECT DISTINCT DATE_FORMAT(d.need_date, '%Y-%m') AS time_label
+                FROM tb_purchase_parts_order_detail d
+                INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+                WHERE IFNULL(d.is_deleted, 0) = 0
+                AND IFNULL(o.is_deleted, 0) = 0
+                AND o.supplier_order_status = 20
+                <if test="supplierId != null">
+                    AND o.supplier_id = #{supplierId}
+                </if>
+                <if test="startDate != null and startDate != ''">
+                    AND d.need_date >= CONCAT(#{startDate}, '-01')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND d.need_date &lt;= LAST_DAY(CONCAT(#{endDate}, '-01'))
+                </if>
+                ORDER BY time_label
+            </when>
+            <when test="granularity == 'year'">
+                SELECT DISTINCT DATE_FORMAT(d.need_date, '%Y') AS time_label
+                FROM tb_purchase_parts_order_detail d
+                INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+                WHERE IFNULL(d.is_deleted, 0) = 0
+                AND IFNULL(o.is_deleted, 0) = 0
+                AND o.supplier_order_status = 20
+                <if test="supplierId != null">
+                    AND o.supplier_id = #{supplierId}
+                </if>
+                <if test="startDate != null and startDate != ''">
+                    AND d.need_date >= CONCAT(#{startDate}, '-01')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND d.need_date &lt;= LAST_DAY(CONCAT(#{endDate}, '-01'))
+                </if>
+                ORDER BY time_label
+            </when>
+            <otherwise>
+                SELECT DISTINCT DATE_FORMAT(d.need_date, '%Y-%m') AS time_label
+                FROM tb_purchase_parts_order_detail d
+                INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+                WHERE IFNULL(d.is_deleted, 0) = 0
+                AND IFNULL(o.is_deleted, 0) = 0
+                AND o.supplier_order_status = 20
+                <if test="supplierId != null">
+                    AND o.supplier_id = #{supplierId}
+                </if>
+                <if test="startDate != null and startDate != ''">
+                    AND d.need_date >= CONCAT(#{startDate}, '-01')
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    AND d.need_date &lt;= LAST_DAY(CONCAT(#{endDate}, '-01'))
+                </if>
+                ORDER BY time_label
+            </otherwise>
+        </choose>
+    </select>
+
+</mapper>

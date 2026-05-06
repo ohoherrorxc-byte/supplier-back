@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.AsnMapper">
+
+    <!-- 查询 ASN 列表 -->
+    <select id="listAsnBySupplier" resultType="map">
+        SELECT * FROM tb_srm_asn
+        WHERE supplier_id = #{supplierId}
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计 ASN 数量 -->
+    <select id="countAsnBySupplier" resultType="long">
+        SELECT COUNT(*) FROM tb_srm_asn WHERE supplier_id = #{supplierId}
+    </select>
+
+    <!-- 查询即将到货的 ASN -->
+    <select id="listUpcomingAsnBySupplier" resultType="map">
+        SELECT a.id,
+               a.asn_no,
+               a.logistics_company,
+               a.tracking_no,
+               a.eta_date,
+               a.status,
+               a.create_time,
+               COUNT(DISTINCT ao.order_id) AS order_count,
+               GROUP_CONCAT(DISTINCT d.parts_name ORDER BY d.parts_name SEPARATOR ', ') AS major_parts
+        FROM tb_srm_asn a
+        LEFT JOIN tb_srm_asn_order ao ON a.id = ao.asn_id
+        LEFT JOIN tb_purchase_parts_order_detail d ON ao.order_id = d.order_id AND IFNULL(d.is_deleted, 0) = 0
+        WHERE a.supplier_id = #{supplierId}
+          AND a.eta_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY a.id
+        ORDER BY a.eta_date ASC, a.id DESC
+    </select>
+
+    <!-- 获取 ASN 详情 -->
+    <select id="findHeaderById" resultType="map">
+        SELECT * FROM tb_srm_asn WHERE id = #{asnId}
+    </select>
+
+    <!-- 根据 ASN ID 查询供应商 ID -->
+    <select id="findSupplierIdByAsnId" resultType="long">
+        SELECT supplier_id FROM tb_srm_asn WHERE id = #{asnId}
+    </select>
+
+    <!-- 查询 ASN 关联的订单 ID 列表 -->
+    <select id="findOrderIdsByAsnId" resultType="long">
+        SELECT order_id FROM tb_srm_asn_order WHERE asn_id = #{asnId} ORDER BY id ASC
+    </select>
+
+    <!-- 查询 ASN 明细行 -->
+    <select id="findAsnLinesByAsnId" resultType="map">
+        SELECT id, asn_id, asn_no, order_detail_id, ship_qty, ship_date, actual_eta_date, warehouse_in_no, status
+        FROM tb_srm_asn
+        WHERE (asn_id = #{asnId} AND id != #{asnId}) OR id = #{asnId}
+        ORDER BY id ASC
+    </select>
+
+    <!-- 查询 ASN 时间线 -->
+    <select id="findTimelineByAsnId" resultType="map">
+        SELECT event_code AS event, description, event_time AS time
+        FROM tb_srm_asn_timeline
+        WHERE asn_id = #{asnId}
+        ORDER BY event_time ASC, id ASC
+    </select>
+
+    <!-- 插入 ASN 头 -->
+    <insert id="insertHeader" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_asn (asn_no, supplier_id, logistics_company, tracking_no, eta_date, status, ship_qty)
+        VALUES (NULL, #{supplierId}, #{logisticsCompany}, #{trackingNo}, #{etaDate}, #{status}, 0)
+    </insert>
+
+    <!-- 更新 ASN 编号 -->
+    <update id="updateAsnNo">
+        UPDATE tb_srm_asn SET asn_no = #{asnNo} WHERE id = #{asnId}
+    </update>
+
+    <!-- 插入 ASN-订单关联 -->
+    <insert id="insertOrderLink">
+        INSERT INTO tb_srm_asn_order (asn_id, order_id) VALUES (#{asnId}, #{orderId})
+    </insert>
+
+    <!-- 插入 ASN 时间线 -->
+    <insert id="insertTimeline">
+        INSERT INTO tb_srm_asn_timeline (asn_id, event_code, description, event_time)
+        VALUES (#{asnId}, #{eventCode}, #{description}, #{eventTime})
+    </insert>
+
+    <!-- 更新 ASN 状态 -->
+    <update id="updateAsnStatus">
+        UPDATE tb_srm_asn SET status = #{newStatus} WHERE id = #{asnId}
+    </update>
+
+    <!-- 插入 ASN 明细行（无 ASN 编号） -->
+    <insert id="insertAsnLineNoAsnNo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_asn (supplier_id, order_detail_id, ship_qty, ship_date, actual_eta_date, warehouse_in_no, status)
+        VALUES (#{supplierId}, #{orderDetailId}, #{shipQty}, #{shipDate}, #{actualEtaDate}, #{warehouseInNo}, 'CREATED')
+    </insert>
+
+    <!-- 插入 ASN 明细行（带 ASN 编号） -->
+    <insert id="insertAsnLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_asn (asn_no, supplier_id, order_detail_id, ship_qty, ship_date, actual_eta_date, warehouse_in_no, status)
+        VALUES (#{asnNo}, #{supplierId}, #{orderDetailId}, #{shipQty}, #{shipDate}, #{actualEtaDate}, #{warehouseInNo}, 'CREATED')
+    </insert>
+
+    <!-- 插入 ASN 明细行（带 ASN ID 关联主表） -->
+    <insert id="insertAsnLineWithAsnId" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_asn (asn_id, supplier_id, order_detail_id, ship_qty, ship_date, actual_eta_date, warehouse_in_no, status)
+        VALUES (#{asnId}, #{supplierId}, #{orderDetailId}, #{shipQty}, #{shipDate}, #{actualEtaDate}, #{warehouseInNo}, 'CREATED')
+    </insert>
+
+    <!-- 更新主表行的 asn_id 为自身 -->
+    <update id="updateAsnSelfReference">
+        UPDATE tb_srm_asn SET asn_id = #{asnId} WHERE id = #{asnId}
+    </update>
+
+    <!-- 更新 ASN 订单明细和发货数量 -->
+    <update id="updateAsnOrderDetailAndShipQty">
+        UPDATE tb_srm_asn
+        SET order_detail_id = #{orderDetailId}, ship_qty = #{shipQty}, ship_date = #{shipDate},
+            actual_eta_date = #{actualEtaDate}, warehouse_in_no = #{warehouseInNo}
+        WHERE id = #{asnId}
+    </update>
+
+    <!-- 更新 ASN 发货信息 -->
+    <update id="updateAsnShipInfo">
+        UPDATE tb_srm_asn
+        SET ship_qty = #{shippedQty}, ship_date = #{shipDate},
+            actual_eta_date = #{actualEtaDate}, warehouse_in_no = #{warehouseInNo}
+        WHERE id = #{asnId}
+    </update>
+
+    <!-- 获取指定供应商在指定日期的当日最大序号 -->
+    <select id="getMaxSeqBySupplierAndDate" resultType="int">
+        SELECT COALESCE(MAX(CAST(SUBSTRING(asn_no, -4) AS UNSIGNED)), 0)
+        FROM tb_srm_asn
+        WHERE supplier_id = #{supplierId} AND ship_date = #{shipDate}
+    </select>
+
+    <!-- 清理指定供应商+日期的占位记录 -->
+    <delete id="cleanupPlaceholderAsn">
+        DELETE FROM tb_srm_asn
+        WHERE supplier_id = #{supplierId} AND ship_date = #{shipDate}
+          AND ship_qty = 0 AND status = 'CREATED' AND asn_no IS NOT NULL
+    </delete>
+
+    <!-- 软删除 ASN -->
+    <update id="softDeleteAsn">
+        UPDATE tb_srm_asn SET is_deleted = 1 WHERE id = #{asnId}
+    </update>
+
+    <!-- 生成新的ASN编号（插入占位记录） -->
+    <insert id="insertAsnPlaceholder">
+        INSERT IGNORE INTO tb_srm_asn (asn_no, supplier_id, ship_date, status, ship_qty)
+        VALUES (#{asnNo}, #{supplierId}, #{shipDate}, 'CREATED', 0)
+    </insert>
+
+    <!-- 根据 ASN 编号和供应商 ID 查询 ID -->
+    <select id="lockAsnNoAndGetId" resultType="long">
+        SELECT id FROM tb_srm_asn WHERE asn_no = #{asnNo} AND supplier_id = #{supplierId}
+    </select>
+
+</mapper>

@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="srm.portal.mapper.ShipmentMapper">
+    <resultMap id="ShipmentResultMap" type="srm.portal.dto.ShipmentDto">
+        <id column="asn_id" property="asnId" />
+        <result column="asn_no" property="asnNo" />
+        <result column="asn_status" property="asnStatus" />
+        <result column="logistics_company" property="logisticsCompany" />
+        <result column="tracking_no" property="trackingNo" />
+        <result column="eta_date" property="etaDate" />
+        <result column="actual_ship_date" property="actualShipDate" />
+        <result column="actual_arrival_date" property="actualArrivalDate" />
+        <result column="shipment_batch_no" property="shipmentBatchNo" />
+        <result column="shipped_qty" property="shippedQty" />
+        <result column="create_time" property="createTime" />
+        <result column="order_id" property="orderId" />
+        <result column="system_order_no" property="systemOrderNo" />
+        <result column="sap_order_no" property="sapOrderNo" />
+        <result column="supplier_id" property="supplierId" />
+        <result column="supplier_duns" property="supplierDuns" />
+        <result column="supplier_name" property="supplierName" />
+        <result column="ship_to_plant" property="shipToPlant" />
+        <result column="ship_to_address" property="shipToAddress" />
+        <result column="parts_no" property="partsNo" />
+        <result column="parts_name" property="partsName" />
+        <result column="ship_date" property="shipDate" />
+        <result column="actual_eta_date" property="actualEtaDate" />
+        <result column="warehouse_in_no" property="warehouseInNo" />
+        <result column="storage_name" property="storageName" />
+    </resultMap>
+
+    <select id="searchShipments" resultMap="ShipmentResultMap">
+        SELECT
+            a.id AS asn_id,
+            a.asn_no AS asn_no,
+            a.status AS asn_status,
+            a.logistics_company AS logistics_company,
+            a.tracking_no AS tracking_no,
+            a.eta_date AS eta_date,
+            a.ship_qty AS shipped_qty,
+            a.create_time AS create_time,
+            o.id AS order_id,
+            o.order_no AS system_order_no,
+            o.order_no AS sap_order_no,
+            o.supplier_id AS supplier_id,
+            o.supplier_no AS supplier_duns,
+            o.supplier_name AS supplier_name,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            d.parts_number AS parts_no,
+            d.parts_name AS parts_name,
+            a.ship_date AS ship_date,
+            a.actual_eta_date AS actual_eta_date,
+            a.warehouse_in_no AS warehouse_in_no,
+            d.storage_name AS storage_name
+        FROM tb_srm_asn a
+        LEFT JOIN tb_srm_asn_order ao ON a.id = ao.asn_id
+        LEFT JOIN tb_purchase_parts_order o ON ao.order_id = o.id
+        LEFT JOIN tb_purchase_parts_order_detail d ON a.order_detail_id = d.id
+        WHERE 1=1
+        AND IFNULL(a.is_deleted, 0) = 0
+        <if test="asnNos != null and asnNos.size() > 0">
+            AND a.asn_no IN
+            <foreach collection="asnNos" item="asnNo" open="(" close=")" separator=",">
+                #{asnNo}
+            </foreach>
+        </if>
+        <if test="supplierNos != null and supplierNos.size() > 0">
+            AND o.supplier_no IN
+            <foreach collection="supplierNos" item="supplierNo" open="(" close=")" separator=",">
+                #{supplierNo}
+            </foreach>
+        </if>
+        <if test="systemOrderNos != null and systemOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="systemOrderNos" item="orderNo" open="(" close=")" separator=",">
+                #{orderNo}
+            </foreach>
+        </if>
+        <if test="sapOrderNos != null and sapOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="sapOrderNos" item="sapOrderNo" open="(" close=")" separator=",">
+                #{sapOrderNo}
+            </foreach>
+        </if>
+        <if test="shippedFlag != null and shippedFlag!=''">
+            AND a.status = #{shippedFlag}
+        </if>
+        <!-- <if test="shippedFlag != null and shippedFlag.toString() == 'N'">
+            AND a.status != 'SHIPPED'
+        </if> -->
+        <if test="partsNos != null and partsNos.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNos" item="partsNo" open="(" close=")" separator=",">
+                #{partsNo}
+            </foreach>
+        </if>
+        <if test="actualEtaDate != null and actualEtaDate != ''">
+            AND a.actual_eta_date = #{actualEtaDate}
+        </if>
+        ORDER BY a.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="searchShipmentsBySupplier" resultMap="ShipmentResultMap">
+        SELECT
+            a.id AS asn_id,
+            a.asn_no AS asn_no,
+            a.status AS asn_status,
+            a.logistics_company AS logistics_company,
+            a.tracking_no AS tracking_no,
+            a.eta_date AS eta_date,
+            a.ship_qty AS shipped_qty,
+            a.create_time AS create_time,
+            o.id AS order_id,
+            o.order_no AS system_order_no,
+            o.order_no AS sap_order_no,
+            o.supplier_id AS supplier_id,
+            o.supplier_no AS supplier_duns,
+            o.supplier_name AS supplier_name,
+            o.storage_name AS ship_to_plant,
+            o.address AS ship_to_address,
+            d.parts_number AS parts_no,
+            d.parts_name AS parts_name,
+            a.ship_date AS ship_date,
+            a.actual_eta_date AS actual_eta_date,
+            a.warehouse_in_no AS warehouse_in_no,
+            d.storage_name AS storage_name
+        FROM tb_srm_asn a
+        LEFT JOIN tb_srm_asn_order ao ON a.id = ao.asn_id
+        LEFT JOIN tb_purchase_parts_order o ON ao.order_id = o.id
+        LEFT JOIN tb_purchase_parts_order_detail d ON a.order_detail_id = d.id
+        WHERE 1=1
+        AND IFNULL(a.is_deleted, 0) = 0
+        AND a.supplier_id = #{supplierId}
+        <if test="asnNos != null and asnNos.size() > 0">
+            AND a.asn_no IN
+            <foreach collection="asnNos" item="asnNo" open="(" close=")" separator=",">
+                #{asnNo}
+            </foreach>
+        </if>
+        <if test="supplierNos != null and supplierNos.size() > 0">
+            AND o.supplier_no IN
+            <foreach collection="supplierNos" item="supplierNo" open="(" close=")" separator=",">
+                #{supplierNo}
+            </foreach>
+        </if>
+        <if test="systemOrderNos != null and systemOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="systemOrderNos" item="orderNo" open="(" close=")" separator=",">
+                #{orderNo}
+            </foreach>
+        </if>
+        <if test="sapOrderNos != null and sapOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="sapOrderNos" item="sapOrderNo" open="(" close=")" separator=",">
+                #{sapOrderNo}
+            </foreach>
+        </if>
+        <if test="shippedFlag != null and shippedFlag!=''">
+            AND a.status = #{shippedFlag}
+        </if>
+        <if test="partsNos != null and partsNos.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNos" item="partsNo" open="(" close=")" separator=",">
+                #{partsNo}
+            </foreach>
+        </if>
+        <if test="actualEtaDate != null and actualEtaDate != ''">
+            AND a.actual_eta_date = #{actualEtaDate}
+        </if>
+        ORDER BY a.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countShipments" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT a.id)
+        FROM tb_srm_asn a
+        LEFT JOIN tb_srm_asn_order ao ON a.id = ao.asn_id
+        LEFT JOIN tb_purchase_parts_order o ON ao.order_id = o.id
+        LEFT JOIN tb_purchase_parts_order_detail d ON a.order_detail_id = d.id
+        WHERE 1=1
+        AND IFNULL(a.is_deleted, 0) = 0
+        <if test="asnNos != null and asnNos.size() > 0">
+            AND a.asn_no IN
+            <foreach collection="asnNos" item="asnNo" open="(" close=")" separator=",">
+                #{asnNo}
+            </foreach>
+        </if>
+        <if test="supplierNos != null and supplierNos.size() > 0">
+            AND o.supplier_no IN
+            <foreach collection="supplierNos" item="supplierNo" open="(" close=")" separator=",">
+                #{supplierNo}
+            </foreach>
+        </if>
+        <if test="systemOrderNos != null and systemOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="systemOrderNos" item="orderNo" open="(" close=")" separator=",">
+                #{orderNo}
+            </foreach>
+        </if>
+        <if test="sapOrderNos != null and sapOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="sapOrderNos" item="sapOrderNo" open="(" close=")" separator=",">
+                #{sapOrderNo}
+            </foreach>
+        </if>
+        <if test="shippedFlag != null and shippedFlag!=''">
+            AND a.status =  #{shippedFlag}
+        </if>
+        <if test="partsNos != null and partsNos.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNos" item="partsNo" open="(" close=")" separator=",">
+                #{partsNo}
+            </foreach>
+        </if>
+        <if test="actualEtaDate != null and actualEtaDate != ''">
+            AND a.actual_eta_date = #{actualEtaDate}
+        </if>
+    </select>
+
+    <select id="countShipmentsBySupplier" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT a.id)
+        FROM tb_srm_asn a
+        LEFT JOIN tb_srm_asn_order ao ON a.id = ao.asn_id
+        LEFT JOIN tb_purchase_parts_order o ON ao.order_id = o.id
+        LEFT JOIN tb_purchase_parts_order_detail d ON a.order_detail_id = d.id
+        WHERE 1=1
+        AND IFNULL(a.is_deleted, 0) = 0
+        AND a.supplier_id = #{supplierId}
+        <if test="asnNos != null and asnNos.size() > 0">
+            AND a.asn_no IN
+            <foreach collection="asnNos" item="asnNo" open="(" close=")" separator=",">
+                #{asnNo}
+            </foreach>
+        </if>
+        <if test="supplierNos != null and supplierNos.size() > 0">
+            AND o.supplier_no IN
+            <foreach collection="supplierNos" item="supplierNo" open="(" close=")" separator=",">
+                #{supplierNo}
+            </foreach>
+        </if>
+        <if test="systemOrderNos != null and systemOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="systemOrderNos" item="orderNo" open="(" close=")" separator=",">
+                #{orderNo}
+            </foreach>
+        </if>
+        <if test="sapOrderNos != null and sapOrderNos.size() > 0">
+            AND o.order_no IN
+            <foreach collection="sapOrderNos" item="sapOrderNo" open="(" close=")" separator=",">
+                #{sapOrderNo}
+            </foreach>
+        </if>
+        <if test="shippedFlag != null and shippedFlag!=''">
+            AND a.status =  #{shippedFlag}
+        </if>
+        <if test="partsNos != null and partsNos.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNos" item="partsNo" open="(" close=")" separator=",">
+                #{partsNo}
+            </foreach>
+        </if>
+        <if test="actualEtaDate != null and actualEtaDate != ''">
+            AND a.actual_eta_date = #{actualEtaDate}
+        </if>
+    </select>
+</mapper>

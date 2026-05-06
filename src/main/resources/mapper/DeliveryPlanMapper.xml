@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.DeliveryPlanMapper">
+
+    <!-- 插入交付计划 (使用注解方式，参见 DeliveryPlanMapper.insertDeliveryPlan) -->
+
+    <!-- 查询交付计划列表（按订单） -->
+    <select id="listDeliveryPlanByOrder" resultType="map">
+        SELECT p.id AS plan_id, p.plan_no, p.order_id, p.order_detail_id, p.supplier_id, p.plan_quantity, p.plan_date, p.status, p.is_deleted, p.create_time, p.update_time,
+               o.order_no,
+               pm.EXTERNAL_PART_NO AS parts_no,
+               pm.CHINESE_NAME AS parts_name,
+               COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) AS shipped_qty,
+               CASE
+                   WHEN COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) >= p.plan_quantity
+                   THEN 'SHIPPED'
+                   ELSE p.status
+               END AS calculated_status
+        FROM tb_delivery_plan p
+        INNER JOIN tb_purchase_parts_order o ON p.order_id = o.id
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = p.order_detail_id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE p.order_id = #{orderId}
+        ORDER BY p.id ASC
+    </select>
+
+    <!-- 查询交付计划列表（按供应商，可选筛选） -->
+    <select id="listDeliveryPlanBySupplier" resultType="map">
+        SELECT p.id AS plan_id, p.plan_no, p.order_id, p.order_detail_id, p.supplier_id, p.plan_quantity, p.plan_date, p.status, p.is_deleted, p.create_time, p.update_time,
+               o.order_no,
+               pm.EXTERNAL_PART_NO AS parts_no,
+               pm.CHINESE_NAME AS parts_name,
+               d.need_date AS requirement_date,
+               COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) AS total_shipped,
+               CASE
+                   WHEN COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) >= p.plan_quantity
+                   THEN 'SHIPPED'
+                   ELSE p.status
+               END AS calculated_status
+        FROM tb_delivery_plan p
+        INNER JOIN tb_purchase_parts_order o ON p.order_id = o.id
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = p.order_detail_id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE 1=1
+        <if test="supplierId != null">
+            AND p.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo != ''">
+            AND o.order_no LIKE CONCAT('%', #{orderNo}, '%')
+        </if>
+        <if test="partsNo != null and partsNo.size() > 0">
+            AND (
+                <foreach collection="partsNo" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND p.plan_date >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND p.plan_date &lt;= #{endDate}
+        </if>
+        <if test="status != null and status != ''">
+            AND p.status = #{status}
+        </if>
+        ORDER BY p.plan_date ASC, p.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计交付计划数量（按供应商） -->
+    <select id="countDeliveryPlanBySupplier" resultType="int">
+        SELECT COUNT(DISTINCT p.order_id)
+        FROM tb_delivery_plan p
+        INNER JOIN tb_purchase_parts_order o ON p.order_id = o.id
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = p.order_detail_id
+        WHERE 1=1
+        <if test="supplierId != null">
+            AND p.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo != ''">
+            AND o.order_no LIKE CONCAT('%', #{orderNo}, '%')
+        </if>
+        <if test="partsNo != null and partsNo.size() > 0">
+            AND (
+                <foreach collection="partsNo" item="pn" open="(" separator=" OR " close=")">
+                    d.parts_number LIKE CONCAT('%', #{pn}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND p.plan_date >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND p.plan_date &lt;= #{endDate}
+        </if>
+        <if test="status != null and status != ''">
+            AND p.status = #{status}
+        </if>
+    </select>
+
+    <!-- 查询即将到货的交付计划 -->
+    <select id="listUpcomingDeliveryPlan" resultType="map">
+        SELECT p.id AS plan_id, p.plan_no, p.order_id, p.order_detail_id, p.supplier_id, p.plan_quantity, p.plan_date, p.status, p.is_deleted, p.create_time, p.update_time,
+               o.order_no,
+               pm.EXTERNAL_PART_NO AS parts_no,
+               pm.CHINESE_NAME AS parts_name,
+               COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) AS shipped_qty,
+               CASE
+                   WHEN COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) >= p.plan_quantity
+                   THEN 'SHIPPED'
+                   ELSE p.status
+               END AS calculated_status
+        FROM tb_delivery_plan p
+        INNER JOIN tb_purchase_parts_order o ON p.order_id = o.id
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = p.order_detail_id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE p.plan_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 6 DAY)
+          AND p.status != 'COMPLETED'
+        <if test="supplierId != null">
+            AND p.supplier_id = #{supplierId}
+        </if>
+        ORDER BY p.plan_date ASC, p.id DESC
+    </select>
+
+    <!-- 查询单个交付计划详情 -->
+    <select id="findDeliveryPlanById" resultType="map">
+        SELECT p.id AS plan_id, p.plan_no, p.order_id, p.order_detail_id, p.supplier_id, p.plan_quantity, p.plan_date, p.status, p.is_deleted, p.create_time, p.update_time,
+               o.order_no,
+               pm.EXTERNAL_PART_NO AS parts_no,
+               pm.CHINESE_NAME AS parts_name,
+               COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) AS shipped_qty,
+               CASE
+                   WHEN COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = p.order_detail_id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0) >= p.plan_quantity
+                   THEN 'SHIPPED'
+                   ELSE p.status
+               END AS calculated_status
+        FROM tb_delivery_plan p
+        INNER JOIN tb_purchase_parts_order o ON p.order_id = o.id
+        INNER JOIN tb_purchase_parts_order_detail d ON d.id = p.order_detail_id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE p.id = #{planId}
+    </select>
+
+    <!-- 更新交付计划状态 -->
+    <update id="updateDeliveryPlanStatus">
+        UPDATE tb_delivery_plan SET status = #{newStatus} WHERE id = #{planId}
+    </update>
+
+    <!-- 更新交付计划发货信息 -->
+    <update id="updateDeliveryPlanShipInfo">
+        UPDATE tb_delivery_plan
+        SET actual_quantity = #{actualQuantity}, actual_eta_date = #{actualEtaDate},
+            tracking_no = #{trackingNo}, logistics_company = #{logisticsCompany},
+            ship_date = #{shipDate}, status = 'SHIPPED'
+        WHERE id = #{planId}
+    </update>
+
+    <!-- 更新交付计划的 ASN ID -->
+    <update id="updateDeliveryPlanAsnId">
+        UPDATE tb_delivery_plan SET asn_id = #{asnId} WHERE id = #{planId}
+    </update>
+
+    <!-- 查询订单明细已规划的总数量 -->
+    <select id="queryPlannedQuantityByOrderDetail" resultType="int">
+        SELECT COALESCE(SUM(plan_quantity), 0)
+        FROM tb_delivery_plan
+        WHERE order_detail_id = #{orderDetailId} AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询最大计划编号 -->
+    <select id="getMaxPlanSeqBySupplierAndDate" resultType="int">
+        SELECT COALESCE(MAX(CAST(RIGHT(plan_no, 4) AS UNSIGNED)), 0)
+        FROM tb_delivery_plan
+        WHERE supplier_id = #{supplierId} AND plan_no LIKE CONCAT(#{planNoPrefix}, '%')
+    </select>
+
+    <!-- 查询最大计划编号（带供应商维度） -->
+    <select id="getMaxPlanSeqWithSupplier" resultType="int">
+        SELECT COALESCE(MAX(CAST(RIGHT(plan_no, 4) AS UNSIGNED)), 0)
+        FROM tb_delivery_plan
+        WHERE supplier_id = #{supplierId}
+    </select>
+
+</mapper>

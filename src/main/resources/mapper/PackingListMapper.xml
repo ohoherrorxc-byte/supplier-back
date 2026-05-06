@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.PackingListMapper">
+
+    <!-- 插入箱单主表 -->
+    <insert id="insertPackingList" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_packing_list
+        (asn_id, asn_line_id, parts_no, pn_no, description, packing_method, shipped_qty,
+         units_per_pallet, layers, pallet_count, total_units, gross_weight_per, net_weight_per,
+         total_gross_weight, total_net_weight, pallet_length, pallet_width, pallet_height, total_cbm,
+         carton_count, total_gross_carton, total_net_carton, carton_cbm, carton_size, remark, status)
+        VALUES (#{asnId}, #{asnLineId}, #{partsNo}, #{pnNo}, #{description}, #{packingMethod}, #{shippedQty},
+                #{unitsPerPallet}, #{layers}, #{palletCount}, #{totalUnits}, #{grossWeightPer}, #{netWeightPer},
+                #{totalGrossWeight}, #{totalNetWeight}, #{palletLength}, #{palletWidth}, #{palletHeight}, #{totalCbm},
+                #{cartonCount}, #{totalGrossCarton}, #{totalNetCarton}, #{cartonCbm}, #{cartonSize}, #{remark}, 'CREATED')
+    </insert>
+
+    <!-- 根据 ID 查询箱单 -->
+    <select id="findPackingListById" resultType="map">
+        SELECT * FROM tb_srm_packing_list WHERE id = #{id}
+    </select>
+
+    <!-- 根据 ASN ID 查询箱单列表 -->
+    <select id="findByAsnId" resultType="map">
+        SELECT * FROM tb_srm_packing_list WHERE asn_id = #{asnId} ORDER BY id ASC
+    </select>
+
+    <!-- 根据 ASN 行 ID 查询箱单列表 -->
+    <select id="findByAsnLineId" resultType="map">
+        SELECT * FROM tb_srm_packing_list WHERE asn_line_id = #{asnLineId} ORDER BY id ASC
+    </select>
+
+    <!-- 删除箱单 -->
+    <delete id="deletePackingList">
+        DELETE FROM tb_srm_packing_list WHERE id = #{id}
+    </delete>
+
+    <!-- 删除箱单关联的 Handling Unit -->
+    <delete id="deleteHandlingUnitsByPackingListId">
+        DELETE FROM tb_srm_handling_unit WHERE packing_list_id = #{packingListId}
+    </delete>
+
+    <!-- 插入包装单元 -->
+    <insert id="insertHandlingUnit" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_srm_handling_unit
+        (packing_list_id, asn_id, unit_type, unit_no, unit_seq, quantity,
+         gross_weight, net_weight, length_mm, width_mm, height_mm, cbm, print_status)
+        VALUES (#{packingListId}, #{asnId}, #{unitType}, #{unitNo}, #{unitSeq}, #{quantity},
+                #{grossWeight}, #{netWeight}, #{lengthMm}, #{widthMm}, #{heightMm}, #{cbm}, 'UNPRINTED')
+    </insert>
+
+    <!-- 根据箱单 ID 查询包装单元列表 -->
+    <select id="findHandlingUnitsByPackingListId" resultType="map">
+        SELECT * FROM tb_srm_handling_unit WHERE packing_list_id = #{packingListId} ORDER BY unit_seq ASC
+    </select>
+
+    <!-- 根据 ASN ID 查询包装单元列表 -->
+    <select id="findHandlingUnitsByAsnId" resultType="map">
+        SELECT * FROM tb_srm_handling_unit WHERE asn_id = #{asnId} ORDER BY packing_list_id, unit_seq ASC
+    </select>
+
+    <!-- 统计包装单元数量 -->
+    <select id="countHandlingUnitsByPackingListId" resultType="int">
+        SELECT COUNT(*) FROM tb_srm_handling_unit WHERE packing_list_id = #{packingListId}
+    </select>
+
+</mapper>
