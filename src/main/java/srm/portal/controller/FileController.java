@@ -1,12 +1,9 @@
 package srm.portal.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import srm.portal.entity.FlowFile;
-import srm.portal.mapper.FlowFileMapper;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -24,9 +21,6 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/file")
 public class FileController {
-
-    @Autowired
-    private FlowFileMapper flowFileMapper;
 
     @Value("${oss.endpoint:}")
     private String ossEndpoint;
@@ -54,13 +48,11 @@ public class FileController {
     }
 
     /**
-     * 文件上传接口
+     * 文件上传接口（只上传到OSS，不保存数据库）
      */
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> upload(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "businessId", required = false) Long businessId,
-            @RequestParam(value = "businessName", required = false) String businessName
+            @RequestParam("file") MultipartFile file
     ) {
         Map<String, Object> result = new HashMap<>();
         try {
@@ -91,23 +83,13 @@ public class FileController {
             // 构建访问 URL
             String fileUrlPath = fileUrl + objectKey;
 
-            // 保存文件记录到数据库
-            FlowFile flowFile = new FlowFile();
-            flowFile.setId(System.currentTimeMillis()); // 手动生成 ID
-            flowFile.setBusinessId(businessId);
-            flowFile.setBusinessName(businessName);
-            flowFile.setUrl(fileUrlPath);
-            flowFile.setName(originalFilename);
-            flowFile.setCreateUser(1L); // TODO: 从 session 获取真实 userId
-            flowFile.setStatus("1");
-            flowFileMapper.insert(flowFile);
-
             result.put("success", true);
             result.put("message", "上传成功");
             result.put("url", fileUrlPath);
             result.put("name", originalFilename);
             result.put("size", file.getSize());
-            result.put("id", flowFile.getId());
+            // 不保存到数据库，返回临时ID（时间戳）
+            result.put("id", System.currentTimeMillis());
 
             return ResponseEntity.ok(result);
         } catch (Exception e) {

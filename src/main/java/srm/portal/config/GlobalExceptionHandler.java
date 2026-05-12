@@ -36,8 +36,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        System.out.println("=== HttpMessageNotReadableException ===");
+        System.out.println("ex.getMessage(): " + ex.getMessage());
+        System.out.println("ex.getCause(): " + ex.getCause());
+        if (ex.getCause() != null) {
+            ex.getCause().printStackTrace();
+        }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("message", "请求参数错误"));
+                .body(Map.of("message", "请求参数错误: " + ex.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

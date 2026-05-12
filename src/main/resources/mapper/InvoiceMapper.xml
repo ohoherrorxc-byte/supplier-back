@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.InvoiceMapper">
+
+    <!-- 待开票项 ResultMap -->
+    <resultMap id="PendingInvoiceItemResultMap" type="srm.portal.dto.PendingInvoiceItem">
+        <id property="acceptDetailId" column="accept_detail_id"/>
+        <result property="acceptApplyNo" column="accept_apply_no"/>
+        <result property="partsNo" column="parts_no"/>
+        <result property="partsName" column="parts_name"/>
+        <result property="remark" column="remark"/>
+        <result property="unitName" column="unit_name"/>
+        <result property="quantity" column="quantity"/>
+        <result property="amount" column="amount"/>
+        <result property="acceptCategory" column="accept_category"/>
+        <result property="acceptStatus" column="accept_status"/>
+        <result property="supplierNo" column="supplier_no"/>
+        <result property="supplierName" column="supplier_name"/>
+        <result property="contractNo" column="contract_no"/>
+        <result property="contractName" column="contract_name"/>
+        <result property="acceptDate" column="accept_date"/>
+    </resultMap>
+
+    <!-- 结算单项 ResultMap -->
+    <resultMap id="SettlementOrderItemResultMap" type="srm.portal.dto.SettlementOrderItem">
+        <id property="id" column="id"/>
+        <result property="settlementNo" column="settlement_no"/>
+        <result property="supplierNo" column="supplier_no"/>
+        <result property="supplierName" column="supplier_name"/>
+        <result property="invoiceNo" column="invoice_no"/>
+        <result property="invoiceDate" column="invoice_date"/>
+        <result property="invoiceTotalAmount" column="invoice_total_amount"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <!-- 结算单明细项 ResultMap -->
+    <resultMap id="SettlementDetailItemResultMap" type="srm.portal.dto.SettlementDetailItem">
+        <id property="id" column="id"/>
+        <result property="settlementId" column="settlement_id"/>
+        <result property="acceptApplyNo" column="accept_apply_no"/>
+        <result property="acceptDetailId" column="accept_detail_id"/>
+        <result property="partsNo" column="parts_no"/>
+        <result property="partsName" column="parts_name"/>
+        <result property="unit" column="unit"/>
+        <result property="quantity" column="quantity"/>
+        <result property="unitPrice" column="unit_price"/>
+        <result property="amount" column="amount"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="taxAmount" column="tax_amount"/>
+        <result property="totalAmount" column="total_amount"/>
+    </resultMap>
+
+    <!-- 查询待开票清单 - 一般采购 -->
+    <select id="listPendingInvoiceGeneral" resultMap="PendingInvoiceItemResultMap">
+        SELECT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               pc.SUPPLIER_NO AS supplier_no,
+               pc.SUPPLIER_NAME AS supplier_name,
+               a.PURCHASE_CONTRACT_NO AS contract_no,
+               a.PURCHASE_CONTRACT_NAME AS contract_name,
+               a.CREATE_TIME AS accept_date
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+        ORDER BY a.CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计待开票清单 - 一般采购 -->
+    <select id="countPendingInvoiceGeneral" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <!-- 查询待开票清单 - BOM采购 -->
+    <select id="listPendingInvoiceBom" resultMap="PendingInvoiceItemResultMap">
+        SELECT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               bc.SUPPLIER_NO AS supplier_no,
+               bc.SUPPLIER_NAME AS supplier_name,
+               a.BOM_PURCHASE_CONTRACT_NO AS contract_no,
+               a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
+               a.CREATE_TIME AS accept_date
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+        ORDER BY a.CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计待开票清单 - BOM采购 -->
+    <select id="countPendingInvoiceBom" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <!-- 创建结算单 -->
+    <insert id="insertSettlementOrder">
+        INSERT INTO tb_settlement_order (
+            SETTLEMENT_NO, supplier_no, supplier_name,
+            INVOICE_AMOUNT, INVOICE_TAX_RATE, INVOICE_TAX_AMOUNT, INVOICE_TOTAL_AMOUNT,
+            remark, STATUS, CREATE_USER, CREATE_DEPT, ACCEPT_DETAIL_IDS
+        ) VALUES (
+            #{settlementNo}, #{supplierNo}, #{supplierName},
+            #{invoiceAmount}, #{invoiceTaxRate}, #{invoiceTaxAmount}, #{invoiceTotalAmount},
+            #{remark}, 0, #{createUser}, #{createDept}, #{acceptDetailIds}
+        )
+    </insert>
+
+    <!-- 获取刚插入的结算单ID -->
+    <select id="getLastInsertId" resultType="long">
+        SELECT LAST_INSERT_ID()
+    </select>
+
+    <!-- 查询结算单列表 -->
+    <select id="listSettlementOrders" resultMap="SettlementOrderItemResultMap">
+        SELECT ID AS id,
+               SETTLEMENT_NO AS settlement_no,
+               supplier_no AS supplier_no,
+               supplier_name AS supplier_name,
+               INVOICE_TOTAL_AMOUNT AS invoice_total_amount,
+               STATUS AS status,
+               CREATE_TIME AS create_time
+        FROM tb_settlement_order
+        WHERE IS_DELETED = 0
+        <if test="supplierNo != null and supplierNo != ''">
+            AND supplier_no = #{supplierNo}
+        </if>
+        <if test="settlementNo != null and settlementNo != ''">
+            AND SETTLEMENT_NO LIKE CONCAT('%', #{settlementNo}, '%')
+        </if>
+        <if test="status != null">
+            AND STATUS = #{status}
+        </if>
+        ORDER BY CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计结算单数量 -->
+    <select id="countSettlementOrders" resultType="long">
+        SELECT COUNT(*) FROM tb_settlement_order
+        WHERE IS_DELETED = 0
+        <if test="supplierNo != null and supplierNo != ''">
+            AND supplier_no = #{supplierNo}
+        </if>
+    </select>
+
+    <!-- 查询供应商编号（根据供应商ID） -->
+    <select id="getSupplierNoBySupplierId" resultType="string">
+        SELECT SUPPLIER_NO FROM tb_contract_supplier
+        WHERE ID = #{supplierId} AND IFNULL(IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 生成结算单号（获取当前最大序号） -->
+    <select id="getMaxSettlementSeq" resultType="int">
+        SELECT COALESCE(MAX(CAST(RIGHT(SETTLEMENT_NO, 4) AS UNSIGNED)), 0)
+        FROM tb_settlement_order
+        WHERE SETTLEMENT_NO LIKE CONCAT('S', #{dateStr}, '%')
+    </select>
+
+    <!-- 保存结算单附件 -->
+    <insert id="insertSettlementAttachment">
+        INSERT INTO tb_settlement_order_attachment (SETTLEMENT_ID, ATTACHMENT_ID, CREATE_TIME, IS_DELETED)
+        VALUES (#{settlementId}, #{attachmentId}, NOW(), 0)
+    </insert>
+
+    <!-- 创建结算单发票明细 -->
+    <insert id="insertSettlementInvoiceLine">
+        INSERT INTO tb_settlement_invoice_line (
+            SETTLEMENT_ID, INVOICE_NO, INVOICE_DATE, PROJECT_NAME, PART_NO,
+            TAX_RATE, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, ATTACHMENT_NAME, ATTACHMENT_URL, IS_DELETED
+        ) VALUES (
+            #{settlementId}, #{invoiceNo}, #{invoiceDate}, #{projectName}, #{partNo},
+            #{taxRate}, #{taxAmount}, #{totalAmount}, #{attachmentId}, #{attachmentName}, #{attachmentUrl}, 0
+        )
+    </insert>
+
+    <!-- 查询供应商公司ID（根据用户ID） -->
+    <select id="findSupplierCompanyIdByUserId" resultType="long">
+        SELECT ud.SUPPLIER_COMPANY_ID
+        FROM tb_user_detail ud
+        WHERE ud.USER_ID = #{userId} AND IFNULL(ud.IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 更新附件的业务ID -->
+    <update id="updateFlowFileBusinessId">
+        UPDATE tb_flow_file SET business_id = #{businessId} WHERE id = #{id}
+    </update>
+
+    <!-- 检查用户是否为管理员 -->
+    <select id="isAdminUser" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM tb_user_detail ud
+        WHERE ud.USER_ID = #{userId}
+          AND IFNULL(ud.IS_DELETED, 0) = 0
+          AND ud.IS_SUPPLIER_ADMIN IN ('是', '1', 'true')
+    </select>
+
+</mapper>
