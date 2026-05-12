@@ -145,6 +145,12 @@ public class OcrInvoiceService {
             JsonNode json = objectMapper.readTree(jsonResponse);
             result.put("rawResponse", jsonResponse);
 
+            // DEBUG: 打印原始返回结构
+            System.out.println("=== OCR VAT Response ===");
+            System.out.println("words_result type: " + (json.has("words_result") ? json.get("words_result").getNodeType() : "MISSING"));
+            System.out.println("words_result: " + json.get("words_result"));
+            System.out.println("========================");
+
             if (json.has("error_code")) {
                 String errorMsg = json.has("error_msg") ? json.get("error_msg").asText() : "百度 OCR 错误";
                 result.put("message", errorMsg);
@@ -153,66 +159,79 @@ public class OcrInvoiceService {
             }
 
             JsonNode wordsResult = json.get("words_result");
-            if (wordsResult == null) {
+            if (wordsResult == null || !wordsResult.isArray()) {
                 result.put("message", "未识别到发票信息");
                 result.put("success", false);
                 return result;
             }
 
-            if (wordsResult.has("InvoiceNum")) {
-                result.put("invoiceNo", wordsResult.get("InvoiceNum").asText(""));
-            }
-            if (wordsResult.has("InvoiceDate")) {
-                String dateStr = wordsResult.get("InvoiceDate").asText("");
-                dateStr = dateStr.replace("年", "-").replace("月", "-").replace("日", "");
-                result.put("invoiceDate", dateStr);
-            }
-            if (wordsResult.has("TotalAmount")) {
-                try {
-                    result.put("totalAmount", Double.parseDouble(wordsResult.get("TotalAmount").asText("0").replace(",", "")));
-                } catch (Exception e) {
-                    result.put("totalAmount", 0.0);
-                }
-            }
-            if (wordsResult.has("TotalTax")) {
-                try {
-                    result.put("taxAmount", Double.parseDouble(wordsResult.get("TotalTax").asText("0").replace(",", "")));
-                } catch (Exception e) {
-                    result.put("taxAmount", 0.0);
-                }
-            }
-            if (wordsResult.has("CommodityTaxRate")) {
-                try {
-                    String rate = wordsResult.get("CommodityTaxRate").get(0).get("word").asText("0").replace("%", "").replace(" ", "");
-                    result.put("taxRate", Double.parseDouble(rate));
-                } catch (Exception e) {
-                    result.put("taxRate", 0.0);
-                }
-            }
-            if (wordsResult.has("AmountInFiguers")) {
-                try {
-                    result.put("amount", Double.parseDouble(wordsResult.get("AmountInFiguers").asText("0").replace(",", "")));
-                } catch (Exception e) {
-                    result.put("amount", 0.0);
-                }
-            }
-            if (wordsResult.has("PurchaserName")) {
-                result.put("buyerName", wordsResult.get("PurchaserName").asText(""));
-            }
-            if (wordsResult.has("SellerName")) {
-                result.put("sellerName", wordsResult.get("SellerName").asText(""));
-            }
-            if (wordsResult.has("ServiceType")) {
-                result.put("serviceType", wordsResult.get("ServiceType").asText(""));
-            }
-            if (wordsResult.has("CommodityName")) {
-                JsonNode commodityName = wordsResult.get("CommodityName");
-                if (commodityName != null && commodityName.isArray() && commodityName.size() > 0) {
-                    result.put("projectName", commodityName.get(0).get("word").asText(""));
+            // 取第一个发票（一般只有一张发票）
+            JsonNode invoiceNode = wordsResult.get(0);
+            JsonNode vatResult = invoiceNode.get("result");
+
+            // 发票表头
+            String invoiceNo = vatResult.has("InvoiceNum") ? vatResult.get("InvoiceNum").asText("") : "";
+            String invoiceDate = vatResult.has("InvoiceDate") ? vatResult.get("InvoiceDate").asText("").replace("年", "-").replace("月", "-").replace("日", "") : "";
+            String buyerName = vatResult.has("PurchaserName") ? vatResult.get("PurchaserName").asText("") : "";
+            String sellerName = vatResult.has("SellerName") ? vatResult.get("SellerName").asText("") : "";
+
+            // 按 row 分组：找出所有 row 值
+            Set<String> rowKeys = new LinkedHashSet<>();
+            JsonNode[] commodityFields = {
+                vatResult.has("CommodityName") ? vatResult.get("CommodityName") : null,
+                vatResult.has("CommodityType") ? vatResult.get("CommodityType") : null,
+                vatResult.has("CommodityTaxRate") ? vatResult.get("CommodityTaxRate") : null,
+                vatResult.has("CommodityAmount") ? vatResult.get("CommodityAmount") : null,
+                vatResult.has("CommodityTax") ? vatResult.get("CommodityTax") : null,
+            };
+            for (JsonNode field : commodityFields) {
+                if (field != null && field.isArray()) {
+                    for (JsonNode item : field) {
+                        if (item.has("row")) {
+                            rowKeys.add(item.get("row").asText());
+                        }
+                    }
                 }
             }
 
+            // 按 row 聚合每行数据
+            System.out.println("=== Row Keys Found: " + rowKeys + " (count=" + rowKeys.size() + ") ===");
+            List<Map<String, Object>> invoiceResults = new ArrayList<>();
+            for (String rowKey : rowKeys) {
+                Map<String, Object> invoice = new HashMap<>();
+                invoice.put("invoiceNo", invoiceNo);
+                invoice.put("invoiceDate", invoiceDate);
+                invoice.put("buyerName", buyerName);
+                invoice.put("sellerName", sellerName);
+
+                invoice.put("projectName", getRowWord(vatResult.has("CommodityName") ? vatResult.get("CommodityName") : null, rowKey));
+                invoice.put("partNo", getRowWord(vatResult.has("CommodityType") ? vatResult.get("CommodityType") : null, rowKey));
+                invoice.put("taxRate", parseDouble(getRowWord(vatResult.has("CommodityTaxRate") ? vatResult.get("CommodityTaxRate") : null, rowKey).replace("%", "").replace(" ", ""), 0.0));
+                double amount = parseDouble(getRowWord(vatResult.has("CommodityAmount") ? vatResult.get("CommodityAmount") : null, rowKey).replace(",", ""), 0.0);
+                double taxAmount = parseDouble(getRowWord(vatResult.has("CommodityTax") ? vatResult.get("CommodityTax") : null, rowKey).replace(",", ""), 0.0);
+                invoice.put("amount", amount);
+                invoice.put("taxAmount", taxAmount);
+                invoice.put("totalAmount", Math.round((amount + taxAmount) * 100.0) / 100.0);
+                invoiceResults.add(invoice);
+                System.out.println("Row " + rowKey + " -> projectName=" + invoice.get("projectName") + ", partNo=" + invoice.get("partNo") + ", amount=" + amount + ", taxAmount=" + taxAmount);
+            }
+
+            System.out.println("=== invoiceResults size: " + invoiceResults.size() + " ===");
+            result.put("invoiceResults", invoiceResults);
+            result.put("count", invoiceResults.size());
+
+            if (!invoiceResults.isEmpty()) {
+                Map<String, Object> first = invoiceResults.get(0);
+                result.put("invoiceNo", first.get("invoiceNo"));
+                result.put("invoiceDate", first.get("invoiceDate"));
+                result.put("totalAmount", first.get("totalAmount"));
+                result.put("taxAmount", first.get("taxAmount"));
+                result.put("taxRate", first.get("taxRate"));
+                result.put("projectName", first.get("projectName"));
+                result.put("partNo", first.get("partNo"));
+            }
             result.put("success", true);
+            result.put("message", "识别到 " + invoiceResults.size() + " 条商品");
         } catch (Exception e) {
             result.put("message", "解析失败: " + e.getMessage());
             result.put("success", false);
@@ -220,11 +239,38 @@ public class OcrInvoiceService {
         return result;
     }
 
+    private String getRowWord(JsonNode array, String rowKey) {
+        if (array == null || !array.isArray()) return "";
+        for (JsonNode item : array) {
+            if (rowKey.equals(item.has("row") ? item.get("row").asText() : "")) {
+                return item.has("word") ? item.get("word").asText("") : "";
+            }
+        }
+        return "";
+    }
+
+    private String getJsonArrayText(JsonNode array, int index) {
+        if (array == null || !array.isArray() || index >= array.size()) return "";
+        JsonNode item = array.get(index);
+        if (item == null) return "";
+        if (item.has("word")) return item.get("word").asText("");
+        return item.asText("");
+    }
+
+    private Double parseDouble(String str, Double defaultVal) {
+        try { return Double.parseDouble(str); } catch (Exception e) { return defaultVal; }
+    }
+
     private Map<String, Object> parseMultipleInvoiceResponse(String jsonResponse) {
         Map<String, Object> result = createEmptyResult("票据识别完成");
         try {
             JsonNode json = objectMapper.readTree(jsonResponse);
             result.put("rawResponse", jsonResponse);
+
+            // DEBUG: 打印原始返回结构
+            System.out.println("=== OCR PDF Response ===");
+            System.out.println("words_result: " + json.get("words_result"));
+            System.out.println("=======================");
 
             if (json.has("error_code")) {
                 String errorMsg = json.has("error_msg") ? json.get("error_msg").asText() : "百度 OCR 错误";
@@ -241,72 +287,107 @@ public class OcrInvoiceService {
                 return result;
             }
 
-            // 取第一个
-            JsonNode firstResult = wordsResultArray.get(0);
-            JsonNode wordsResult = firstResult.get("result");
-            if (wordsResult == null) {
-                result.put("message", "票据数据解析失败");
-                result.put("success", false);
-                return result;
+            // 解析所有发票
+            List<Map<String, Object>> invoiceResults = new ArrayList<>();
+            int count = wordsResultArray.size();
+            for (int i = 0; i < count; i++) {
+                JsonNode item = wordsResultArray.get(i);
+                JsonNode wordsResult = item.has("result") ? item.get("result") : item;
+                if (wordsResult == null) continue;
+
+                // DEBUG: 打印每个发票的 result 结构
+                System.out.println("=== PDF Invoice[" + i + "] result: " + wordsResult + " ===");
+
+                // 按 row 分组：找出所有 row 值（参考增值税发票逻辑）
+                Set<String> rowKeys = new LinkedHashSet<>();
+                JsonNode[] commodityFields = {
+                    wordsResult.has("CommodityName") ? wordsResult.get("CommodityName") : null,
+                    wordsResult.has("CommodityType") ? wordsResult.get("CommodityType") : null,
+                    wordsResult.has("CommodityTaxRate") ? wordsResult.get("CommodityTaxRate") : null,
+                    wordsResult.has("CommodityAmount") ? wordsResult.get("CommodityAmount") : null,
+                    wordsResult.has("CommodityTax") ? wordsResult.get("CommodityTax") : null,
+                };
+                for (JsonNode field : commodityFields) {
+                    if (field != null && field.isArray()) {
+                        for (JsonNode fieldItem : field) {
+                            if (fieldItem.has("row")) {
+                                rowKeys.add(fieldItem.get("row").asText());
+                            }
+                        }
+                    }
+                }
+                System.out.println("PDF Invoice[" + i + "] rowKeys: " + rowKeys + " (count=" + rowKeys.size() + ")");
+
+                // 如果有多个 row，按 row 拆分行
+                if (!rowKeys.isEmpty()) {
+                    for (String rowKey : rowKeys) {
+                        Map<String, Object> invoice = new HashMap<>();
+                        invoice.put("invoiceNo", extractWord(wordsResult.get("InvoiceNum")));
+                        String dateStr = extractWord(wordsResult.get("InvoiceDate"));
+                        invoice.put("invoiceDate", dateStr.isEmpty() ? "" : dateStr.replace("年", "-").replace("月", "-").replace("日", ""));
+                        invoice.put("buyerName", extractWord(wordsResult.get("PurchaserName")));
+                        invoice.put("sellerName", extractWord(wordsResult.get("SellerName")));
+
+                        invoice.put("projectName", getRowWord(wordsResult.has("CommodityName") ? wordsResult.get("CommodityName") : null, rowKey));
+                        invoice.put("partNo", getRowWord(wordsResult.has("CommodityType") ? wordsResult.get("CommodityType") : null, rowKey));
+                        double amount = parseDouble(getRowWord(wordsResult.has("CommodityAmount") ? wordsResult.get("CommodityAmount") : null, rowKey).replace(",", ""), 0.0);
+                        double taxAmount = parseDouble(getRowWord(wordsResult.has("CommodityTax") ? wordsResult.get("CommodityTax") : null, rowKey).replace(",", ""), 0.0);
+                        invoice.put("amount", amount);
+                        invoice.put("taxAmount", taxAmount);
+                        invoice.put("totalAmount", Math.round((amount + taxAmount) * 100.0) / 100.0);
+                        try {
+                            String taxRate = getRowWord(wordsResult.has("CommodityTaxRate") ? wordsResult.get("CommodityTaxRate") : null, rowKey).replace("%", "").replace(" ", "");
+                            invoice.put("taxRate", parseDouble(taxRate, 0.0));
+                        } catch (Exception e) { invoice.put("taxRate", 0.0); }
+
+                        invoiceResults.add(invoice);
+                        System.out.println("PDF Row " + rowKey + " -> projectName=" + invoice.get("projectName") + ", amount=" + amount);
+                    }
+                } else {
+                    // 单行发票（原逻辑）
+                    Map<String, Object> invoice = new HashMap<>();
+                    invoice.put("invoiceNo", extractWord(wordsResult.get("InvoiceNum")));
+                    String dateStr = extractWord(wordsResult.get("InvoiceDate"));
+                    invoice.put("invoiceDate", dateStr.isEmpty() ? "" : dateStr.replace("年", "-").replace("月", "-").replace("日", ""));
+
+                    try {
+                        String totalAmount = extractWordOrDefault(wordsResult.get("AmountInFiguers"), "0");
+                        invoice.put("totalAmount", Double.parseDouble(totalAmount.replace(",", "")));
+                    } catch (Exception e) { invoice.put("totalAmount", 0.0); }
+
+                    try {
+                        String totalTax = extractWordOrDefault(wordsResult.get("TotalTax"), "0");
+                        invoice.put("taxAmount", Double.parseDouble(totalTax.replace(",", "")));
+                    } catch (Exception e) { invoice.put("taxAmount", 0.0); }
+
+                    try {
+                        String taxRate = extractWordOrDefault(wordsResult.get("CommodityTaxRate"), "0");
+                        invoice.put("taxRate", Double.parseDouble(taxRate.replace("%", "").replace(" ", "")));
+                    } catch (Exception e) { invoice.put("taxRate", 0.0); }
+
+                    invoice.put("projectName", extractWord(wordsResult.get("CommodityName")));
+                    invoice.put("partNo", extractWord(wordsResult.get("CommodityType")));
+                    invoice.put("buyerName", extractWord(wordsResult.get("PurchaserName")));
+                    invoice.put("sellerName", extractWord(wordsResult.get("SellerName")));
+                    invoiceResults.add(invoice);
+                }
             }
 
-            // 提取字段值（PDF返回结构是 [{"word": "value"}]）
-            String invoiceNum = extractWord(wordsResult.get("InvoiceNum"));
-            if (!invoiceNum.isEmpty()) {
-                result.put("invoiceNo", invoiceNum);
+            result.put("invoiceResults", invoiceResults);
+            result.put("count", invoiceResults.size());
+            // 单条结果保持兼容
+            if (!invoiceResults.isEmpty()) {
+                Map<String, Object> first = invoiceResults.get(0);
+                result.put("invoiceNo", first.get("invoiceNo"));
+                result.put("invoiceDate", first.get("invoiceDate"));
+                result.put("totalAmount", first.get("totalAmount"));
+                result.put("taxAmount", first.get("taxAmount"));
+                result.put("taxRate", first.get("taxRate"));
+                result.put("projectName", first.get("projectName"));
+                result.put("partNo", first.get("partNo"));
             }
-
-            String invoiceDate = extractWord(wordsResult.get("InvoiceDate"));
-            if (!invoiceDate.isEmpty()) {
-                invoiceDate = invoiceDate.replace("年", "-").replace("月", "-").replace("日", "");
-                result.put("invoiceDate", invoiceDate);
-            }
-
-            try {
-                // 总金额从 AmountInFiguers 提取（价税合计）
-                String totalAmount = extractWordOrDefault(wordsResult.get("AmountInFiguers"), "0");
-                result.put("totalAmount", Double.parseDouble(totalAmount.replace(",", "")));
-            } catch (Exception e) {}
-
-            try {
-                String totalTax = extractWordOrDefault(wordsResult.get("TotalTax"), "0");
-                result.put("taxAmount", Double.parseDouble(totalTax.replace(",", "")));
-            } catch (Exception e) {}
-
-            try {
-                String taxRate = extractWordOrDefault(wordsResult.get("CommodityTaxRate"), "0");
-                taxRate = taxRate.replace("%", "").replace(" ", "");
-                result.put("taxRate", Double.parseDouble(taxRate));
-            } catch (Exception e) {}
-
-            try {
-                String amount = extractWordOrDefault(wordsResult.get("AmountInFiguers"), "0");
-                result.put("amount", Double.parseDouble(amount.replace(",", "")));
-            } catch (Exception e) {}
-
-            String purchaserName = extractWord(wordsResult.get("PurchaserName"));
-            if (!purchaserName.isEmpty()) {
-                result.put("buyerName", purchaserName);
-            }
-
-            String sellerName = extractWord(wordsResult.get("SellerName"));
-            if (!sellerName.isEmpty()) {
-                result.put("sellerName", sellerName);
-            }
-
-            // 项目名称（从商品名称提取）
-            String projectName = extractWord(wordsResult.get("CommodityName"));
-            if (!projectName.isEmpty()) {
-                result.put("projectName", projectName);
-            }
-
-            // 零件号（从商品型号提取）
-            String partNo = extractWord(wordsResult.get("CommodityType"));
-            if (!partNo.isEmpty()) {
-                result.put("partNo", partNo);
-            }
-
             result.put("success", true);
+            result.put("message", "识别到 " + invoiceResults.size() + " 条发票");
         } catch (Exception e) {
             result.put("message", "解析失败: " + e.getMessage());
             result.put("success", false);

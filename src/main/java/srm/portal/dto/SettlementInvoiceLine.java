@@ -6,6 +6,7 @@ import java.math.BigDecimal;
  * 结算单发票明细
  */
 public class SettlementInvoiceLine {
+    private Long id;
     private Long settlementId;
     private String invoiceNo;
     private String invoiceDate;
@@ -17,6 +18,14 @@ public class SettlementInvoiceLine {
     private Long attachmentId;
     private String attachmentName;
     private String attachmentUrl;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public Long getSettlementId() {
         return settlementId;

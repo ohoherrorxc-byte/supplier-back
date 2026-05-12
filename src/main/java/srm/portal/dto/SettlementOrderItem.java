@@ -12,7 +12,7 @@ public class SettlementOrderItem {
     private String supplierNo;
     private String supplierName;
     private String invoiceNo;
-    private LocalDateTime invoiceDate;
+    private String invoiceDate;
     private BigDecimal invoiceTotalAmount;
     private Integer status;
     private LocalDateTime createTime;
@@ -57,11 +57,11 @@ public class SettlementOrderItem {
         this.invoiceNo = invoiceNo;
     }
 
-    public LocalDateTime getInvoiceDate() {
+    public String getInvoiceDate() {
         return invoiceDate;
     }
 
-    public void setInvoiceDate(LocalDateTime invoiceDate) {
+    public void setInvoiceDate(String invoiceDate) {
         this.invoiceDate = invoiceDate;
     }
 

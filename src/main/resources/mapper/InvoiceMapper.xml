@@ -76,6 +76,11 @@
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -99,6 +104,11 @@
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -128,6 +138,11 @@
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -151,6 +166,11 @@
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -176,25 +196,30 @@
 
     <!-- 查询结算单列表 -->
     <select id="listSettlementOrders" resultMap="SettlementOrderItemResultMap">
-        SELECT ID AS id,
-               SETTLEMENT_NO AS settlement_no,
-               supplier_no AS supplier_no,
-               supplier_name AS supplier_name,
-               INVOICE_TOTAL_AMOUNT AS invoice_total_amount,
-               STATUS AS status,
-               CREATE_TIME AS create_time
-        FROM tb_settlement_order
-        WHERE IS_DELETED = 0
+        SELECT s.ID AS id,
+               s.SETTLEMENT_NO AS settlement_no,
+               s.supplier_no AS supplier_no,
+               c.SUPPLIER_NAME AS supplier_name,
+               s.INVOICE_TOTAL_AMOUNT AS invoice_total_amount,
+               s.STATUS AS status,
+               s.CREATE_TIME AS create_time,
+               GROUP_CONCAT(DISTINCT l.INVOICE_NO ORDER BY l.ID SEPARATOR ',') AS invoice_no,
+               GROUP_CONCAT(DISTINCT l.INVOICE_DATE ORDER BY l.ID SEPARATOR ',') AS invoice_date
+        FROM tb_settlement_order s
+        LEFT JOIN tb_settlement_invoice_line l ON s.ID = l.SETTLEMENT_ID AND l.IS_DELETED = 0
+        LEFT JOIN tb_contract_supplier c ON s.supplier_no = c.SUPPLIER_NO AND c.IS_DELETED = 0
+        WHERE s.IS_DELETED = 0
         <if test="supplierNo != null and supplierNo != ''">
-            AND supplier_no = #{supplierNo}
+            AND s.supplier_no = #{supplierNo}
         </if>
         <if test="settlementNo != null and settlementNo != ''">
-            AND SETTLEMENT_NO LIKE CONCAT('%', #{settlementNo}, '%')
+            AND s.SETTLEMENT_NO LIKE CONCAT('%', #{settlementNo}, '%')
         </if>
         <if test="status != null">
-            AND STATUS = #{status}
+            AND s.STATUS = #{status}
         </if>
-        ORDER BY CREATE_TIME DESC
+        GROUP BY s.ID
+        ORDER BY s.CREATE_TIME DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -213,11 +238,12 @@
         WHERE ID = #{supplierId} AND IFNULL(IS_DELETED, 0) = 0
     </select>
 
-    <!-- 生成结算单号（获取当前最大序号） -->
+    <!-- 生成结算单号（获取当前最大序号，加行锁） -->
     <select id="getMaxSettlementSeq" resultType="int">
         SELECT COALESCE(MAX(CAST(RIGHT(SETTLEMENT_NO, 4) AS UNSIGNED)), 0)
         FROM tb_settlement_order
         WHERE SETTLEMENT_NO LIKE CONCAT('S', #{dateStr}, '%')
+        FOR UPDATE
     </select>
 
     <!-- 保存结算单附件 -->
@@ -229,11 +255,11 @@
     <!-- 创建结算单发票明细 -->
     <insert id="insertSettlementInvoiceLine">
         INSERT INTO tb_settlement_invoice_line (
-            SETTLEMENT_ID, INVOICE_NO, INVOICE_DATE, PROJECT_NAME, PART_NO,
-            TAX_RATE, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, ATTACHMENT_NAME, ATTACHMENT_URL, IS_DELETED
+            ID, SETTLEMENT_ID, INVOICE_NO, INVOICE_DATE, PROJECT_NAME, PART_NO,
+            TAX_RATE, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, IS_DELETED
         ) VALUES (
-            #{settlementId}, #{invoiceNo}, #{invoiceDate}, #{projectName}, #{partNo},
-            #{taxRate}, #{taxAmount}, #{totalAmount}, #{attachmentId}, #{attachmentName}, #{attachmentUrl}, 0
+            #{id}, #{settlementId}, #{invoiceNo}, #{invoiceDate}, #{projectName}, #{partNo},
+            #{taxRate}, #{taxAmount}, #{totalAmount}, #{attachmentId}, 0
         )
     </insert>
 
@@ -249,6 +275,38 @@
         UPDATE tb_flow_file SET business_id = #{businessId} WHERE id = #{id}
     </update>
 
+    <!-- 更新结算单状态 -->
+    <update id="updateSettlementStatus">
+        UPDATE tb_settlement_order SET STATUS = #{status} WHERE ID = #{id}
+    </update>
+
+    <!-- 删除结算单（软删除） -->
+    <update id="deleteSettlementOrder">
+        UPDATE tb_settlement_order SET IS_DELETED = 1 WHERE ID = #{id} AND STATUS = 0
+    </update>
+
+    <!-- 获取结算单发票明细 -->
+    <select id="getSettlementInvoiceLines" resultType="srm.portal.dto.SettlementInvoiceLine">
+        SELECT l.ID AS id, l.SETTLEMENT_ID AS settlementId, l.INVOICE_NO AS invoiceNo, l.INVOICE_DATE AS invoiceDate,
+               l.PROJECT_NAME AS projectName, l.PART_NO AS partNo, l.TAX_RATE AS taxRate, l.TAX_AMOUNT AS taxAmount,
+               l.TOTAL_AMOUNT AS totalAmount, l.ATTACHMENT_ID AS attachmentId,
+               f.NAME AS attachmentName, f.URL AS attachmentUrl
+        FROM tb_settlement_invoice_line l
+        LEFT JOIN tb_flow_file f ON l.ATTACHMENT_ID = f.ID
+        WHERE l.SETTLEMENT_ID = #{settlementId} AND l.IS_DELETED = 0
+    </select>
+
+    <!-- 根据结算单ID获取验收明细详情 -->
+    <select id="getSettlementDetails" resultMap="SettlementDetailItemResultMap">
+        SELECT d.ID AS id, d.ID AS accept_detail_id, d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name, d.UNIT_NAME AS unit, d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount, a.APPLY_NO AS accept_apply_no
+        FROM tb_settlement_order s
+        INNER JOIN tb_accept_apply_detail d ON JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        WHERE s.ID = #{settlementId} AND s.IS_DELETED = 0
+    </select>
+
     <!-- 检查用户是否为管理员 -->
     <select id="isAdminUser" resultType="boolean">
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
@@ -256,6 +314,18 @@
         WHERE ud.USER_ID = #{userId}
           AND IFNULL(ud.IS_DELETED, 0) = 0
           AND ud.IS_SUPPLIER_ADMIN IN ('是', '1', 'true')
+    </select>
+
+    <!-- 检查是否有草稿结算单包含指定验收明细 -->
+    <select id="findDraftSettlements" resultType="map">
+        SELECT ID AS id, SETTLEMENT_NO AS settlementNo
+        FROM tb_settlement_order
+        WHERE IS_DELETED = 0 AND STATUS = 0
+          AND (
+            <foreach collection="acceptDetailIds" item="id" separator=" OR ">
+                JSON_CONTAINS(ACCEPT_DETAIL_IDS, CAST(#{id} AS JSON))
+            </foreach>
+          )
     </select>
 
 </mapper>

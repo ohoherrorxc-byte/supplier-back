@@ -3,6 +3,7 @@ package srm.portal.mapper;
 import org.apache.ibatis.annotations.*;
 import srm.portal.dto.*;
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface InvoiceMapper {
@@ -99,4 +100,29 @@ public interface InvoiceMapper {
      * 创建结算单发票明细
      */
     void insertSettlementInvoiceLine(SettlementInvoiceLine line);
+
+    /**
+     * 根据结算单ID获取结算明细（通过accept_detail_ids反查验收明细）
+     */
+    List<SettlementDetailItem> getSettlementDetails(@Param("settlementId") Long settlementId);
+
+    /**
+     * 根据结算单ID获取发票明细
+     */
+    List<SettlementInvoiceLine> getSettlementInvoiceLines(@Param("settlementId") Long settlementId);
+
+    /**
+     * 更新结算单状态
+     */
+    void updateSettlementStatus(@Param("id") Long id, @Param("status") Integer status);
+
+    /**
+     * 删除结算单（软删除）
+     */
+    void deleteSettlementOrder(@Param("id") Long id);
+
+    /**
+     * 检查是否有草稿结算单包含指定验收明细
+     */
+    List<Map<String, Object>> findDraftSettlements(@Param("acceptDetailIds") List<Long> acceptDetailIds);
 }
