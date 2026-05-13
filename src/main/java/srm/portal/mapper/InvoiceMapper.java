@@ -125,4 +125,20 @@ public interface InvoiceMapper {
      * 检查是否有草稿结算单包含指定验收明细
      */
     List<Map<String, Object>> findDraftSettlements(@Param("acceptDetailIds") List<Long> acceptDetailIds);
+
+    /**
+     * 获取结算单的完工单附件
+     */
+    List<Map<String, Object>> getCompletionFiles(@Param("settlementId") Long settlementId);
+
+    /**
+     * 获取结算单备注
+     */
+    String getSettlementRemark(@Param("settlementId") Long settlementId);
+
+    /**
+     * 插入完工单附件记录
+     */
+    void insertCompletionFile(@Param("id") Long id, @Param("businessId") Long businessId, @Param("businessName") String businessName,
+                              @Param("url") String url, @Param("name") String name, @Param("createUser") Long createUser);
 }

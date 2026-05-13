@@ -199,13 +199,30 @@ public class InvoiceController {
                         line.setProjectName(reqLine.getProjectName());
                         line.setPartNo(reqLine.getPartNo());
                         line.setTaxRate(reqLine.getTaxRate());
+                        line.setAmount(reqLine.getAmount());
                         line.setTaxAmount(reqLine.getTaxAmount());
                         line.setTotalAmount(reqLine.getTotalAmount());
                         line.setAttachmentId(attachmentId);
                         line.setAttachmentName(reqLine.getAttachmentName());
                         line.setAttachmentUrl(reqLine.getAttachmentUrl());
+                        line.setAcceptApplyNo(reqLine.getAcceptApplyNo());
 
                         invoiceMapper.insertSettlementInvoiceLine(line);
+                    }
+                }
+
+                // 插入完工单附件（新建记录）
+                List<Map<String, Object>> completionFiles = req.getCompletionFiles();
+                if (completionFiles != null && !completionFiles.isEmpty()) {
+                    for (Map<String, Object> file : completionFiles) {
+                        invoiceMapper.insertCompletionFile(
+                            System.currentTimeMillis(),
+                            settlementId,
+                            "completionDoc",
+                            (String) file.get("url"),
+                            (String) file.get("name"),
+                            userId
+                        );
                     }
                 }
 
@@ -255,9 +272,13 @@ public class InvoiceController {
         try {
             List<SettlementInvoiceLine> invoiceLines = invoiceMapper.getSettlementInvoiceLines(id);
             List<SettlementDetailItem> details = invoiceMapper.getSettlementDetails(id);
+            List<Map<String, Object>> completionFiles = invoiceMapper.getCompletionFiles(id);
+            String remark = invoiceMapper.getSettlementRemark(id);
             Map<String, Object> result = new HashMap<>();
             result.put("invoiceLines", invoiceLines);
             result.put("details", details);
+            result.put("completionFiles", completionFiles);
+            result.put("remark", remark);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();

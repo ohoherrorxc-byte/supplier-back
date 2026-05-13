@@ -13,11 +13,13 @@ public class SettlementInvoiceLine {
     private String projectName;
     private String partNo;
     private BigDecimal taxRate;
+    private BigDecimal amount;
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
     private Long attachmentId;
     private String attachmentName;
     private String attachmentUrl;
+    private String acceptApplyNo;
 
     public Long getId() {
         return id;
@@ -75,6 +77,14 @@ public class SettlementInvoiceLine {
         this.taxRate = taxRate;
     }
 
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
     public BigDecimal getTaxAmount() {
         return taxAmount;
     }
@@ -113,5 +123,13 @@ public class SettlementInvoiceLine {
 
     public void setAttachmentUrl(String attachmentUrl) {
         this.attachmentUrl = attachmentUrl;
+    }
+
+    public String getAcceptApplyNo() {
+        return acceptApplyNo;
+    }
+
+    public void setAcceptApplyNo(String acceptApplyNo) {
+        this.acceptApplyNo = acceptApplyNo;
     }
 }

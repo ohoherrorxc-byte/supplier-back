@@ -12,6 +12,7 @@ public class SettlementDetailItem {
     private Long acceptDetailId;
     private String partsNo;
     private String partsName;
+    private String remark;
     private String unit;
     private BigDecimal quantity;
     private BigDecimal unitPrice;
@@ -66,6 +67,14 @@ public class SettlementDetailItem {
 
     public void setPartsName(String partsName) {
         this.partsName = partsName;
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
     }
 
     public String getUnit() {

@@ -22,6 +22,8 @@ public class OcrInvoiceService {
     private static final String ACCESS_TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token";
     private static final String VAT_INVOICE_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/vat_invoice";
     private static final String MULTIPLE_INVOICE_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/multiple_invoice";
+    // private static final String MULTIPLE_INVOICE_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"; // 通用识别接口，支持PDF和图片
+    // private static final String MULTIPLE_INVOICE_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/receipt";
 
     // 增值税发票识别 Key
     @Value("${baidu.ocr.api-key:}")

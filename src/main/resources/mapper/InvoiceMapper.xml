@@ -43,6 +43,7 @@
         <result property="acceptDetailId" column="accept_detail_id"/>
         <result property="partsNo" column="parts_no"/>
         <result property="partsName" column="parts_name"/>
+        <result property="remark" column="remark"/>
         <result property="unit" column="unit"/>
         <result property="quantity" column="quantity"/>
         <result property="unitPrice" column="unit_price"/>
@@ -256,10 +257,10 @@
     <insert id="insertSettlementInvoiceLine">
         INSERT INTO tb_settlement_invoice_line (
             ID, SETTLEMENT_ID, INVOICE_NO, INVOICE_DATE, PROJECT_NAME, PART_NO,
-            TAX_RATE, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, IS_DELETED
+            TAX_RATE, AMOUNT, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, ACCEPT_APPLY_NO, IS_DELETED
         ) VALUES (
             #{id}, #{settlementId}, #{invoiceNo}, #{invoiceDate}, #{projectName}, #{partNo},
-            #{taxRate}, #{taxAmount}, #{totalAmount}, #{attachmentId}, 0
+            #{taxRate}, #{amount}, #{taxAmount}, #{totalAmount}, #{attachmentId}, #{acceptApplyNo}, 0
         )
     </insert>
 
@@ -269,11 +270,6 @@
         FROM tb_user_detail ud
         WHERE ud.USER_ID = #{userId} AND IFNULL(ud.IS_DELETED, 0) = 0
     </select>
-
-    <!-- 更新附件的业务ID -->
-    <update id="updateFlowFileBusinessId">
-        UPDATE tb_flow_file SET business_id = #{businessId} WHERE id = #{id}
-    </update>
 
     <!-- 更新结算单状态 -->
     <update id="updateSettlementStatus">
@@ -288,8 +284,8 @@
     <!-- 获取结算单发票明细 -->
     <select id="getSettlementInvoiceLines" resultType="srm.portal.dto.SettlementInvoiceLine">
         SELECT l.ID AS id, l.SETTLEMENT_ID AS settlementId, l.INVOICE_NO AS invoiceNo, l.INVOICE_DATE AS invoiceDate,
-               l.PROJECT_NAME AS projectName, l.PART_NO AS partNo, l.TAX_RATE AS taxRate, l.TAX_AMOUNT AS taxAmount,
-               l.TOTAL_AMOUNT AS totalAmount, l.ATTACHMENT_ID AS attachmentId,
+               l.PROJECT_NAME AS projectName, l.PART_NO AS partNo, l.TAX_RATE AS taxRate, l.AMOUNT AS amount, l.TAX_AMOUNT AS taxAmount,
+               l.TOTAL_AMOUNT AS totalAmount, l.ATTACHMENT_ID AS attachmentId, l.ACCEPT_APPLY_NO AS acceptApplyNo,
                f.NAME AS attachmentName, f.URL AS attachmentUrl
         FROM tb_settlement_invoice_line l
         LEFT JOIN tb_flow_file f ON l.ATTACHMENT_ID = f.ID
@@ -299,7 +295,7 @@
     <!-- 根据结算单ID获取验收明细详情 -->
     <select id="getSettlementDetails" resultMap="SettlementDetailItemResultMap">
         SELECT d.ID AS id, d.ID AS accept_detail_id, d.PARTS_NO AS parts_no,
-               d.PARTS_NAME AS parts_name, d.UNIT_NAME AS unit, d.QUANTITY AS quantity,
+               d.PARTS_NAME AS parts_name, d.REMARK AS remark, d.UNIT_NAME AS unit, d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount, a.APPLY_NO AS accept_apply_no
         FROM tb_settlement_order s
         INNER JOIN tb_accept_apply_detail d ON JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
@@ -327,5 +323,25 @@
             </foreach>
           )
     </select>
+
+    <!-- 获取结算单的完工单附件 -->
+    <select id="getCompletionFiles" resultType="map">
+        SELECT f.ID AS id, f.NAME AS name, f.URL AS url
+        FROM tb_flow_file f
+        WHERE f.business_id = #{settlementId}
+          AND f.business_name = 'completionDoc'
+          AND IFNULL(f.is_deleted, 0) = 0
+    </select>
+
+    <!-- 获取结算单备注 -->
+    <select id="getSettlementRemark" resultType="string">
+        SELECT remark FROM tb_settlement_order WHERE ID = #{settlementId} AND IFNULL(IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 插入完工单附件 -->
+    <insert id="insertCompletionFile">
+        INSERT INTO tb_flow_file (id, business_id, business_name, url, name, create_user, create_time, status, is_deleted)
+        VALUES (#{id}, #{businessId}, #{businessName}, #{url}, #{name}, #{createUser}, NOW(), '1', 0)
+    </insert>
 
 </mapper>
