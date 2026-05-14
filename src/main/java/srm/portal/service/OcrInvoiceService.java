@@ -161,15 +161,27 @@ public class OcrInvoiceService {
             }
 
             JsonNode wordsResult = json.get("words_result");
-            if (wordsResult == null || !wordsResult.isArray()) {
+            if (wordsResult == null) {
                 result.put("message", "未识别到发票信息");
                 result.put("success", false);
                 return result;
             }
 
-            // 取第一个发票（一般只有一张发票）
-            JsonNode invoiceNode = wordsResult.get(0);
-            JsonNode vatResult = invoiceNode.get("result");
+            // 判断是数组还是单个对象
+            JsonNode vatResult;
+            if (wordsResult.isArray()) {
+                // 数组结构：取第一个元素的 result
+                if (wordsResult.isEmpty()) {
+                    result.put("message", "未识别到发票信息");
+                    result.put("success", false);
+                    return result;
+                }
+                JsonNode invoiceNode = wordsResult.get(0);
+                vatResult = invoiceNode.has("result") ? invoiceNode.get("result") : invoiceNode;
+            } else {
+                // 单个对象结构：words_result 本身就是发票结果
+                vatResult = wordsResult;
+            }
 
             // 发票表头
             String invoiceNo = vatResult.has("InvoiceNum") ? vatResult.get("InvoiceNum").asText("") : "";

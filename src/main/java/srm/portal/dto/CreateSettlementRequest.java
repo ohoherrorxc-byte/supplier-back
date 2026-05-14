@@ -17,7 +17,7 @@ public class CreateSettlementRequest {
     private String createDept;
     private List<Long> acceptDetailIds;
     private List<SettlementInvoiceLineRequest> invoiceLines;
-    private List<Map<String, Object>> completionFiles;
+    private List<CompletionFileRequest> completionFiles;
 
     public Long getUserId() {
         return userId;
@@ -99,15 +99,11 @@ public class CreateSettlementRequest {
         this.invoiceLines = invoiceLines;
     }
 
-    public List<Long> getCompletionFileIds() {
-        return completionFileIds;
-    }
-
-    public void setCompletionFiles(List<Map<String, Object>> completionFiles) {
-        this.completionFiles = completionFiles;
-    }
-
-    public List<Map<String, Object>> getCompletionFiles() {
+    public List<CompletionFileRequest> getCompletionFiles() {
         return completionFiles;
+    }
+
+    public void setCompletionFiles(List<CompletionFileRequest> completionFiles) {
+        this.completionFiles = completionFiles;
     }
 }

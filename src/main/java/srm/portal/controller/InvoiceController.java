@@ -212,15 +212,15 @@ public class InvoiceController {
                 }
 
                 // 插入完工单附件（新建记录）
-                List<Map<String, Object>> completionFiles = req.getCompletionFiles();
+                List<CompletionFileRequest> completionFiles = req.getCompletionFiles();
                 if (completionFiles != null && !completionFiles.isEmpty()) {
-                    for (Map<String, Object> file : completionFiles) {
+                    for (CompletionFileRequest file : completionFiles) {
                         invoiceMapper.insertCompletionFile(
                             System.currentTimeMillis(),
                             settlementId,
                             "completionDoc",
-                            (String) file.get("url"),
-                            (String) file.get("name"),
+                            file.getUrl(),
+                            file.getName(),
                             userId
                         );
                     }
