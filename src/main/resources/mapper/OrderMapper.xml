@@ -1124,8 +1124,8 @@
     <!-- 供应商历史需求分析 - 按月/年统计订单数量（基于need_date） -->
     <select id="analyzeSupplierHistory" resultType="map">
         SELECT
-            pm.EXTERNAL_PART_NO AS parts_number,
-            pm.CHINESE_NAME AS parts_name,
+            COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), pm.PARTS_NO) AS parts_number,
+            COALESCE(NULLIF(pm.CHINESE_NAME, ''), pm.PARTS_NAME) AS parts_name,
             o.storage_name AS demand_factory,
             <choose>
                 <when test="granularity == 'month'">
@@ -1168,7 +1168,7 @@
                 #{pn}
             </foreach>
         </if>
-        GROUP BY pm.EXTERNAL_PART_NO, pm.CHINESE_NAME, o.storage_name,
+        GROUP BY COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number), COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name), o.storage_name,
         <choose>
             <when test="granularity == 'month'">
                 DATE_FORMAT(d.need_date, '%Y-%m')
