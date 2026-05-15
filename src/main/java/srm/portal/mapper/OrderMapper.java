@@ -16,6 +16,7 @@ public interface OrderMapper {
             @Param("orderNo") List<String> orderNo,
             @Param("supplierOrderStatus") List<Integer> supplierOrderStatus,
             @Param("supplierName") String supplierName,
+            @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
             @Param("limit") int limit,
@@ -32,18 +33,22 @@ public interface OrderMapper {
             @Param("orderNo") List<String> orderNo,
             @Param("supplierOrderStatus") List<Integer> supplierOrderStatus,
             @Param("supplierName") String supplierName,
+            @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate
     );
 
     /**
-     * 查询订单汇总统计（订单总数、已发运数量、待确认发运数量、剩余数量）
+     * 查询订单汇总统计；已交付/未交付数量仅按订单头 {@code delivery_status}
+     *（值为 {@code "已交付"} 视为已交付，否则为未交付）
+     * 汇总行需求数量，不看 ASN。{@code pending_ship_qty} 仍为 ASN「未发运」口径。
      */
     Map<String, Object> getOrderSummaryStats(
             @Param("supplierId") Long supplierId,
             @Param("orderNo") List<String> orderNo,
             @Param("partsNumber") List<String> partsNumber,
             @Param("supplierOrderStatus") List<Integer> supplierOrderStatus,
+            @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate
     );
@@ -71,6 +76,7 @@ public interface OrderMapper {
             @Param("orderNo") List<String> orderNo,
             @Param("partsNumber") List<String> partsNumber,
             @Param("supplierOrderStatus") Integer supplierOrderStatus,
+            @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
             @Param("limit") int limit,
@@ -87,6 +93,7 @@ public interface OrderMapper {
             @Param("orderNo") List<String> orderNo,
             @Param("partsNumber") List<String> partsNumber,
             @Param("supplierOrderStatus") Integer supplierOrderStatus,
+            @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate
     );

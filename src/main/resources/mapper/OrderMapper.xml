@@ -3,19 +3,32 @@
 
 <mapper namespace="srm.portal.mapper.OrderMapper">
 
+    <!-- 订单头交付状态筛选：未交付含空值 -->
+    <sql id="deliveryStatusFilter">
+        <if test="deliveryStatus != null and deliveryStatus.size() > 0">
+            AND (
+            <foreach collection="deliveryStatus" item="ds" separator=" OR ">
+                <choose>
+                    <when test="ds == '未交付'">
+                        (TRIM(IFNULL(${col}, '')) = '未交付' OR TRIM(IFNULL(${col}, '')) = '')
+                    </when>
+                    <otherwise>
+                        TRIM(IFNULL(${col}, '')) = #{ds}
+                    </otherwise>
+                </choose>
+            </foreach>
+            )
+        </if>
+    </sql>
+
     <!-- 查询订单列表 -->
     <select id="listOrderHeaders" resultType="map">
         SELECT tb_purchase_parts_order.*,
                DATE_FORMAT(tb_purchase_parts_order.create_time, '%Y-%m-%d') AS order_date,
                COALESCE((SELECT SUM(d.need_number) FROM tb_purchase_parts_order_detail d WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0), 0) AS total_need_qty,
-               (
-                   COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = tb_purchase_parts_order.id AND IFNULL(a.is_deleted, 0) = 0), 0)
-                   +
-                   COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
-                       INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
-                       INNER JOIN tb_purchase_parts_order_detail d ON sl.detail_id = d.id
-                       WHERE d.order_id = tb_purchase_parts_order.id), 0)
-               ) AS total_shipped_qty,
+               CASE WHEN TRIM(IFNULL(tb_purchase_parts_order.delivery_status, '')) = '已交付' THEN
+                   COALESCE((SELECT SUM(d.need_number) FROM tb_purchase_parts_order_detail d WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0), 0)
+               ELSE 0 END AS total_shipped_qty,
                s.SUPPLIER_NAME AS supplier_name,
                <!-- 根据订单详情状态计算订单状态 -->
                (
@@ -27,16 +40,7 @@
                    END
                    FROM tb_purchase_parts_order_detail d
                    WHERE d.order_id = tb_purchase_parts_order.id AND IFNULL(d.is_deleted, 0) = 0
-               ) AS supplier_order_status,
-               <!-- 交付状态: 0未交付, 25部分交付, 30已交付 -->
-               (
-                   SELECT CASE
-                       WHEN NOT EXISTS (SELECT 1 FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = tb_purchase_parts_order.id AND a.status = 'SHIPPED' AND IFNULL(a.is_deleted, 0) = 0) THEN 0
-                       WHEN (SELECT COUNT(DISTINCT d2.id) FROM tb_purchase_parts_order_detail d2 WHERE d2.order_id = tb_purchase_parts_order.id AND IFNULL(d2.is_deleted, 0) = 0) =
-                            (SELECT COUNT(DISTINCT d2.id) FROM tb_purchase_parts_order_detail d2 INNER JOIN tb_srm_asn a ON a.order_detail_id = d2.id INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE d2.order_id = tb_purchase_parts_order.id AND a.status = 'SHIPPED' AND IFNULL(a.is_deleted, 0) = 0) THEN 30
-                       ELSE 25
-                   END
-               ) AS delivery_status
+               ) AS supplier_order_status
         FROM tb_purchase_parts_order
         LEFT JOIN tb_contract_supplier s ON tb_purchase_parts_order.supplier_id = s.ID
         WHERE IFNULL(tb_purchase_parts_order.is_deleted, 0) = 0
@@ -69,6 +73,9 @@
         <if test="supplierName != null and supplierName != ''">
             AND s.SUPPLIER_NAME LIKE CONCAT('%', #{supplierName}, '%')
         </if>
+        <include refid="deliveryStatusFilter">
+            <property name="col" value="tb_purchase_parts_order.delivery_status"/>
+        </include>
         <if test="startDate != null and startDate != ''">
             AND tb_purchase_parts_order.order_time >= CONCAT(#{startDate}, ' 00:00:00')
         </if>
@@ -124,6 +131,9 @@
         <if test="supplierName != null and supplierName != ''">
             AND s.SUPPLIER_NAME LIKE CONCAT('%', #{supplierName}, '%')
         </if>
+        <include refid="deliveryStatusFilter">
+            <property name="col" value="tb_purchase_parts_order.delivery_status"/>
+        </include>
         <if test="startDate != null and startDate != ''">
             AND tb_purchase_parts_order.order_time >= CONCAT(#{startDate}, ' 00:00:00')
         </if>
@@ -138,30 +148,11 @@
             COUNT(DISTINCT o.id) AS order_count,
             COALESCE(SUM(d.need_number), 0) AS total_need_qty,
             COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0) AS pending_confirm_qty,
-            COALESCE(SUM(
-                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0)
-                +
-                COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
-                    INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
-                    INNER JOIN tb_purchase_parts_order_detail dd ON sl.detail_id = dd.id
-                    WHERE dd.order_id = o.id), 0)
-            ), 0) AS total_shipped_qty,
+            COALESCE(SUM(CASE WHEN TRIM(IFNULL(o.delivery_status, '')) = '已交付' THEN d.need_number ELSE 0 END), 0) AS total_shipped_qty,
             COALESCE(SUM(
                 COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED'), 0)
             ), 0) AS pending_ship_qty,
-            COALESCE(SUM(d.need_number), 0)
-            - COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0)
-            - COALESCE(SUM(
-                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED'), 0)
-                +
-                COALESCE((SELECT SUM(al.shipped_qty) FROM tb_srm_asn_line al
-                    INNER JOIN tb_srm_po_split_line sl ON al.split_line_id = sl.id
-                    INNER JOIN tb_purchase_parts_order_detail dd ON sl.detail_id = dd.id
-                    WHERE dd.order_id = o.id), 0)
-            ), 0)
-            - COALESCE(SUM(
-                COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED'), 0)
-            ), 0) AS remaining_qty
+            COALESCE(SUM(CASE WHEN TRIM(IFNULL(o.delivery_status, '')) != '已交付' THEN d.need_number ELSE 0 END), 0) AS remaining_qty
         FROM tb_purchase_parts_order o
         INNER JOIN tb_purchase_parts_order_detail d ON o.id = d.order_id
         WHERE IFNULL(o.is_deleted, 0) = 0
@@ -199,6 +190,9 @@
                 #{status}
             </foreach>
         </if>
+        <include refid="deliveryStatusFilter">
+            <property name="col" value="o.delivery_status"/>
+        </include>
         <if test="startDate != null and startDate != ''">
             AND o.order_time >= CONCAT(#{startDate}, ' 00:00:00')
         </if>
@@ -223,18 +217,24 @@
             d.id,
             d.order_id,
             d.parts_number,
+            d.is_old_order,
             COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number) AS parts_no,
             COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name) AS parts_name,
             d.need_number,
             d.need_date,
             d.supplier_order_status,
+            d.delivery_status,
             o.order_no,
             o.address AS ship_to_address,
             o.take_over_connect AS take_over_connect,
             o.connect_number AS connect_number,
             d.storage_name AS storage_name,
-            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0) AS shipped_qty,
-            d.need_number - COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0) AS remaining_qty
+            CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS shipped_qty,
+            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
+            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
+            IFNULL(d.need_number, 0)
+            - CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS remaining_qty,
+            COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.ship_qty IS NOT NULL), 0) AS created_asn_qty
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
         LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
@@ -311,15 +311,11 @@
             pm.CHINESE_NAME AS parts_name,
             s.SUPPLIER_NAME AS supplier_name,
             d.need_number AS order_qty,
-            COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
-            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS shipped_qty,
+            CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS shipped_qty,
             COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
             + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
-            d.need_number
-            - (COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
-            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status = 'SHIPPED' AND a.ship_qty IS NOT NULL), 0))
-            - (COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
-            + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0)) AS remaining_qty,
+            IFNULL(d.need_number, 0)
+            - CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS remaining_qty,
             d.need_date,
             o.address AS ship_to_address,
             d.storage_name AS ship_to_plant,
@@ -353,6 +349,9 @@
         <if test="supplierOrderStatus != null">
             AND d.supplier_order_status = #{supplierOrderStatus}
         </if>
+        <include refid="deliveryStatusFilter">
+            <property name="col" value="o.delivery_status"/>
+        </include>
         <if test="startDate != null and startDate != ''">
             AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
         </if>
@@ -403,6 +402,9 @@
         <if test="supplierOrderStatus != null">
             AND d.supplier_order_status = #{supplierOrderStatus}
         </if>
+        <include refid="deliveryStatusFilter">
+            <property name="col" value="o.delivery_status"/>
+        </include>
         <if test="startDate != null and startDate != ''">
             AND o.create_time >= CONCAT(#{startDate}, ' 00:00:00')
         </if>
@@ -507,6 +509,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND d.supplier_order_status != 0
+          AND TRIM(IFNULL(d.delivery_status, '')) != '已交付'
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
         </if>
@@ -539,6 +542,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND d.supplier_order_status != 0
+          AND TRIM(IFNULL(d.delivery_status, '')) != '已交付'
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
         </if>

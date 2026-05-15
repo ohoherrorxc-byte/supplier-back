@@ -28,6 +28,7 @@ public class OrderCollaborationRepository {
             List<String> orderNo,
             List<String> partsNumber,
             Integer supplierOrderStatus,
+            List<String> deliveryStatus,
             String startDate,
             String endDate,
             int limit,
@@ -35,9 +36,9 @@ public class OrderCollaborationRepository {
             String sortField,
             String sortOrder
     ) {
-        long total = orderMapper.countOrderDetails(supplierId, orderNo, partsNumber, supplierOrderStatus, startDate, endDate);
+        long total = orderMapper.countOrderDetails(supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate);
         List<Map<String, Object>> items = orderMapper.listOrderDetails(
-                supplierId, orderNo, partsNumber, supplierOrderStatus, startDate, endDate, limit, offset, sortField, sortOrder
+                supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate, limit, offset, sortField, sortOrder
         );
         return Map.of("items", items, "total", total);
     }
@@ -67,7 +68,7 @@ public class OrderCollaborationRepository {
      * 列出供应商的订单
      */
     public List<Map<String, Object>> listNewOrdersBySupplier(Long supplierId, int limit, int offset) {
-        return orderMapper.listOrderHeaders(supplierId, null, null, null, null, null, limit, offset, null, null);
+        return orderMapper.listOrderHeaders(supplierId, null, null, null, null, null, null, limit, offset, null, null);
     }
 
     /**

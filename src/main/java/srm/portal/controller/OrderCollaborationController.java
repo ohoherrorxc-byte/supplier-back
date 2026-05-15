@@ -75,6 +75,7 @@ public class OrderCollaborationController {
             @RequestParam(required = false) List<String> orderNo,
             @RequestParam(required = false) List<String> partsNumber,
             @RequestParam(required = false) Integer supplierOrderStatus,
+            @RequestParam(required = false) List<String> deliveryStatus,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "10") int limit,
@@ -98,7 +99,7 @@ public class OrderCollaborationController {
         Long supplierIdValue = isAdmin ? null : supplierId.orElse(null);
 
         Map<String, Object> queryResult = orderRepo.listNewOrderDetailsWithCount(
-                supplierIdValue, orderNo, partsNumber, supplierOrderStatus, startDate, endDate, l, o, sortField, sortOrder
+                supplierIdValue, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate, l, o, sortField, sortOrder
         );
 
         // 创建可变的结果 Map
@@ -120,6 +121,7 @@ public class OrderCollaborationController {
             @RequestParam(required = false) List<String> orderNo,
             @RequestParam(required = false) List<Integer> supplierOrderStatus,
             @RequestParam(required = false) String supplierName,
+            @RequestParam(required = false) List<String> deliveryStatus,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "10") int limit,
@@ -143,11 +145,11 @@ public class OrderCollaborationController {
         Long supplierIdValue = isAdmin ? null : supplierId.orElse(null);
 
         long total = orderRepo.getOrderMapper().countOrderHeaders(
-                supplierIdValue, orderNo, supplierOrderStatus, supplierName, startDate, endDate
+                supplierIdValue, orderNo, supplierOrderStatus, supplierName, deliveryStatus, startDate, endDate
         );
 
         List<Map<String, Object>> items = orderRepo.getOrderMapper().listOrderHeaders(
-                supplierIdValue, orderNo, supplierOrderStatus, supplierName, startDate, endDate, l, o, sortField, sortOrder
+                supplierIdValue, orderNo, supplierOrderStatus, supplierName, deliveryStatus, startDate, endDate, l, o, sortField, sortOrder
         );
 
         // 将 id 字段转换为字符串，防止 JavaScript 精度丢失
@@ -164,6 +166,7 @@ public class OrderCollaborationController {
             @RequestParam(required = false) List<String> orderNo,
             @RequestParam(required = false) List<String> partsNumber,
             @RequestParam(required = false) List<Integer> supplierOrderStatus,
+            @RequestParam(required = false) List<String> deliveryStatus,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate
     ) {
@@ -180,7 +183,7 @@ public class OrderCollaborationController {
         Long supplierIdValue = isAdmin ? null : supplierId.orElse(null);
 
         Map<String, Object> stats = orderRepo.getOrderMapper().getOrderSummaryStats(
-                supplierIdValue, orderNo, partsNumber, supplierOrderStatus, startDate, endDate
+                supplierIdValue, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate
         );
 
         return ResponseEntity.ok(stats);
