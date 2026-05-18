@@ -29,24 +29,17 @@
         <resources>
           <resource>
             <directory>src/main/resources</directory>
-            <excludes>
-              <exclude>application-prod.yml</exclude>
-            </excludes>
           </resource>
         </resources>
       </build>
     </profile>
-    <!-- 生产环境 profile，打包时使用 mvn package -Pprod -->
+    <!-- 生产环境 profile -->
     <profile>
       <id>prod</id>
       <build>
         <resources>
           <resource>
             <directory>src/main/resources</directory>
-            <filtering>true</filtering>
-            <excludes>
-              <exclude>application-dev.yml</exclude>
-            </excludes>
           </resource>
         </resources>
       </build>
