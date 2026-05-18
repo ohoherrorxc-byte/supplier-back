@@ -148,7 +148,7 @@
             COUNT(DISTINCT o.id) AS order_count,
             COALESCE(SUM(d.need_number), 0) AS total_need_qty,
             COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0) AS pending_confirm_qty,
-            COALESCE(SUM(CASE WHEN TRIM(IFNULL(o.delivery_status, '')) = '已交付' THEN d.need_number ELSE 0 END), 0) AS total_shipped_qty,
+            COALESCE(SUM(IFNULL(d.delivery_number, 0)), 0) AS total_shipped_qty,
             COALESCE(SUM(
                 COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a INNER JOIN tb_srm_asn_order ao ON a.id = ao.asn_id WHERE ao.order_id = o.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED'), 0)
             ), 0) AS pending_ship_qty,
@@ -229,7 +229,7 @@
             o.take_over_connect AS take_over_connect,
             o.connect_number AS connect_number,
             d.storage_name AS storage_name,
-            CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS shipped_qty,
+            IFNULL(d.delivery_number, 0) AS shipped_qty,
             COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
             + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
             IFNULL(d.need_number, 0)
@@ -311,11 +311,10 @@
             pm.CHINESE_NAME AS parts_name,
             s.SUPPLIER_NAME AS supplier_name,
             d.need_number AS order_qty,
-            CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS shipped_qty,
+            IFNULL(d.delivery_number, 0) AS shipped_qty,
             COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
             + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
-            IFNULL(d.need_number, 0)
-            - CASE WHEN TRIM(IFNULL(d.delivery_status, '')) = '已交付' THEN IFNULL(d.need_number, 0) ELSE 0 END AS remaining_qty,
+            IFNULL(d.need_number, 0) - IFNULL(d.delivery_number, 0) AS remaining_qty,
             d.need_date,
             o.address AS ship_to_address,
             d.storage_name AS ship_to_plant,
