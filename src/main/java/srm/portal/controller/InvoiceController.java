@@ -207,7 +207,8 @@ public class InvoiceController {
                         line.setAttachmentName(reqLine.getAttachmentName());
                         line.setAttachmentUrl(reqLine.getAttachmentUrl());
                         line.setAcceptApplyNo(reqLine.getAcceptApplyNo());
-
+                        line.setQuantity(reqLine.getQuantity());
+                        line.setUnit(reqLine.getUnit());
                         invoiceMapper.insertSettlementInvoiceLine(line);
                     }
                 }

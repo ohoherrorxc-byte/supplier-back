@@ -77,6 +77,7 @@
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
@@ -105,6 +106,7 @@
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
@@ -141,6 +143,7 @@
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND COALESCE(hp.END_TIME_, a.CREATE_TIME) >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
@@ -169,6 +172,7 @@
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
@@ -259,10 +263,12 @@
     <insert id="insertSettlementInvoiceLine">
         INSERT INTO tb_settlement_invoice_line (
             ID, SETTLEMENT_ID, INVOICE_NO, INVOICE_DATE, PROJECT_NAME, PART_NO,
-            TAX_RATE, AMOUNT, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, ACCEPT_APPLY_NO, IS_DELETED
+            TAX_RATE, AMOUNT, TAX_AMOUNT, TOTAL_AMOUNT, ATTACHMENT_ID, ACCEPT_APPLY_NO, IS_DELETED,
+            QUANTITY, UNIT
         ) VALUES (
             #{id}, #{settlementId}, #{invoiceNo}, #{invoiceDate}, #{projectName}, #{partNo},
-            #{taxRate}, #{amount}, #{taxAmount}, #{totalAmount}, #{attachmentId}, #{acceptApplyNo}, 0
+            #{taxRate}, #{amount}, #{taxAmount}, #{totalAmount}, #{attachmentId}, #{acceptApplyNo}, 0,
+            #{quantity}, #{unit}
         )
     </insert>
 
@@ -288,6 +294,7 @@
         SELECT l.ID AS id, l.SETTLEMENT_ID AS settlementId, l.INVOICE_NO AS invoiceNo, l.INVOICE_DATE AS invoiceDate,
                l.PROJECT_NAME AS projectName, l.PART_NO AS partNo, l.TAX_RATE AS taxRate, l.AMOUNT AS amount, l.TAX_AMOUNT AS taxAmount,
                l.TOTAL_AMOUNT AS totalAmount, l.ATTACHMENT_ID AS attachmentId, l.ACCEPT_APPLY_NO AS acceptApplyNo,
+               l.QUANTITY AS quantity, l.UNIT AS unit,
                f.NAME AS attachmentName, f.URL AS attachmentUrl
         FROM tb_settlement_invoice_line l
         LEFT JOIN tb_flow_file f ON l.ATTACHMENT_ID = f.ID

@@ -18,6 +18,8 @@ public class SettlementInvoiceLineRequest {
     private String attachmentName;
     private String attachmentUrl;
     private String acceptApplyNo;
+    private BigDecimal quantity;
+    private String unit;
 
     public String getInvoiceNo() {
         return invoiceNo;
@@ -113,5 +115,21 @@ public class SettlementInvoiceLineRequest {
 
     public void setAcceptApplyNo(String acceptApplyNo) {
         this.acceptApplyNo = acceptApplyNo;
+    }
+
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
     }
 }
