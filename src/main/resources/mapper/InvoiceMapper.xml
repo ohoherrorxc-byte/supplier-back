@@ -69,10 +69,12 @@
                pc.SUPPLIER_NAME AS supplier_name,
                a.PURCHASE_CONTRACT_NO AS contract_no,
                a.PURCHASE_CONTRACT_NAME AS contract_name,
-               a.CREATE_TIME AS accept_date
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
+               a.PROCESS_INSTANCE_ID AS process_instance_id
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        LEFT JOIN `act_hi_procinst` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
@@ -92,7 +94,7 @@
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
-        ORDER BY a.CREATE_TIME DESC
+        ORDER BY hp.END_TIME_ DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
