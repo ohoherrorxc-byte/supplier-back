@@ -95,11 +95,12 @@ public class InvoiceController {
 
     /**
      * 生成结算单号
+     * 规则：供应商编号 + 年月 + 4位序号（如 GYS-2022100001 + 202605 + 0001）
      */
-    private String generateSettlementNo() {
-        String dateStr = new SimpleDateFormat("yyyyMMdd").format(new Date());
-        int nextSeq = invoiceMapper.getMaxSettlementSeq(dateStr) + 1;
-        return "S" + dateStr + String.format("%04d", nextSeq);
+    private String generateSettlementNo(String supplierNo) {
+        String dateStr = new SimpleDateFormat("yyyyMM").format(new Date());
+        int nextSeq = invoiceMapper.getMaxSettlementSeq(supplierNo, dateStr) + 1;
+        return supplierNo + dateStr + String.format("%04d", nextSeq);
     }
 
     /**
@@ -155,7 +156,7 @@ public class InvoiceController {
 
             // 使用事务包装，并发冲突时重试
             Map<String, Object> result = transactionTemplate.execute(status -> {
-                String settlementNo = generateSettlementNo();
+                String settlementNo = generateSettlementNo(supplierNo);
 
                 // 插入结算单头
                 invoiceMapper.insertSettlementOrder(

@@ -131,7 +131,7 @@
                bc.SUPPLIER_NAME AS supplier_name,
                a.BOM_PURCHASE_CONTRACT_NO AS contract_no,
                a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
-               hp.END_TIME_ AS accept_date,
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
                a.PROCESS_INSTANCE_ID AS process_instance_id
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
@@ -245,7 +245,7 @@
     <select id="getMaxSettlementSeq" resultType="int">
         SELECT COALESCE(MAX(CAST(RIGHT(SETTLEMENT_NO, 4) AS UNSIGNED)), 0)
         FROM tb_settlement_order
-        WHERE SETTLEMENT_NO LIKE CONCAT('S', #{dateStr}, '%')
+        WHERE SETTLEMENT_NO LIKE CONCAT(#{supplierNo}, #{dateStr}, '%')
         FOR UPDATE
     </select>
 

@@ -84,7 +84,7 @@ public interface InvoiceMapper {
     /**
      * 生成结算单号（获取当前最大序号）
      */
-    Integer getMaxSettlementSeq(@Param("dateStr") String dateStr);
+    Integer getMaxSettlementSeq(@Param("supplierNo") String supplierNo, @Param("dateStr") String dateStr);
 
     /**
      * 查询供应商公司ID（根据用户ID）

@@ -220,6 +220,8 @@ public class OcrInvoiceService {
 
                 invoice.put("projectName", getRowWord(vatResult.has("CommodityName") ? vatResult.get("CommodityName") : null, rowKey));
                 invoice.put("partNo", getRowWord(vatResult.has("CommodityType") ? vatResult.get("CommodityType") : null, rowKey));
+                invoice.put("quantity", parseDouble(getRowWord(vatResult.has("CommodityNum") ? vatResult.get("CommodityNum") : null, rowKey).replace(",", ""), 0.0));
+                invoice.put("unit", getRowWord(vatResult.has("CommodityUnit") ? vatResult.get("CommodityUnit") : null, rowKey));
                 invoice.put("taxRate", parseDouble(getRowWord(vatResult.has("CommodityTaxRate") ? vatResult.get("CommodityTaxRate") : null, rowKey).replace("%", "").replace(" ", ""), 0.0));
                 double amount = parseDouble(getRowWord(vatResult.has("CommodityAmount") ? vatResult.get("CommodityAmount") : null, rowKey).replace(",", ""), 0.0);
                 double taxAmount = parseDouble(getRowWord(vatResult.has("CommodityTax") ? vatResult.get("CommodityTax") : null, rowKey).replace(",", ""), 0.0);
@@ -344,6 +346,8 @@ public class OcrInvoiceService {
 
                         invoice.put("projectName", getRowWord(wordsResult.has("CommodityName") ? wordsResult.get("CommodityName") : null, rowKey));
                         invoice.put("partNo", getRowWord(wordsResult.has("CommodityType") ? wordsResult.get("CommodityType") : null, rowKey));
+                        invoice.put("quantity", parseDouble(getRowWord(wordsResult.has("CommodityNum") ? wordsResult.get("CommodityNum") : null, rowKey).replace(",", ""), 0.0));
+                        invoice.put("unit", getRowWord(wordsResult.has("CommodityUnit") ? wordsResult.get("CommodityUnit") : null, rowKey));
                         double amount = parseDouble(getRowWord(wordsResult.has("CommodityAmount") ? wordsResult.get("CommodityAmount") : null, rowKey).replace(",", ""), 0.0);
                         double taxAmount = parseDouble(getRowWord(wordsResult.has("CommodityTax") ? wordsResult.get("CommodityTax") : null, rowKey).replace(",", ""), 0.0);
                         invoice.put("amount", amount);
