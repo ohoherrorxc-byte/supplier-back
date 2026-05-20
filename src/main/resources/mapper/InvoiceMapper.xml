@@ -20,6 +20,8 @@
         <result property="contractNo" column="contract_no"/>
         <result property="contractName" column="contract_name"/>
         <result property="acceptDate" column="accept_date"/>
+        <result property="projectName" column="project_name"/>
+        <result property="purchaseOrderType" column="purchase_order_type"/>
     </resultMap>
 
     <!-- 结算单项 ResultMap -->
@@ -70,11 +72,14 @@
                a.PURCHASE_CONTRACT_NO AS contract_no,
                a.PURCHASE_CONTRACT_NAME AS contract_name,
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
-               a.PROCESS_INSTANCE_ID AS process_instance_id
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               pcd.PROJECT_NAME AS project_name,
+               pc.PURCHASE_ORDER_TYPE AS purchase_order_type
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
         LEFT JOIN `act_hi_procinst` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        LEFT JOIN tb_purchase_contract_detail pcd ON a.PURCHASE_APPLY_NO = pcd.PURCHASE_NO AND pcd.IS_DELETED = 0
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
@@ -136,7 +141,9 @@
                a.BOM_PURCHASE_CONTRACT_NO AS contract_no,
                a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
-               a.PROCESS_INSTANCE_ID AS process_instance_id
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               (SELECT bom.PROJECT_NAME FROM tb_bom_purchase_order_detail bom WHERE bom.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND bom.IS_DELETED = 0 ORDER BY bom.ID LIMIT 1) AS project_name,
+               (SELECT po.PURCHASE_ORDER_TYPE FROM tb_bom_purchase_order po WHERE po.APPLY_NO = a.BOM_PURCHASE_ORDER_NO AND po.IS_DELETED = 0 LIMIT 1) AS purchase_order_type
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
@@ -190,11 +197,11 @@
         INSERT INTO tb_settlement_order (
             SETTLEMENT_NO, supplier_no, supplier_name,
             INVOICE_AMOUNT, INVOICE_TAX_RATE, INVOICE_TAX_AMOUNT, INVOICE_TOTAL_AMOUNT,
-            remark, STATUS, CREATE_USER, CREATE_DEPT, ACCEPT_DETAIL_IDS
+            remark, STATUS, CREATE_USER, CREATE_DEPT, ACCEPT_DETAIL_IDS, ACCEPT_APPLY_NO
         ) VALUES (
             #{settlementNo}, #{supplierNo}, #{supplierName},
             #{invoiceAmount}, #{invoiceTaxRate}, #{invoiceTaxAmount}, #{invoiceTotalAmount},
-            #{remark}, 0, #{createUser}, #{createDept}, #{acceptDetailIds}
+            #{remark}, 0, #{createUser}, #{createDept}, #{acceptDetailIds}, #{acceptApplyNo}
         )
     </insert>
 
@@ -341,6 +348,15 @@
         FROM tb_flow_file f
         WHERE f.business_id = #{settlementId}
           AND f.business_name = 'completionDoc'
+          AND IFNULL(f.is_deleted, 0) = 0
+    </select>
+
+    <!-- 获取结算单的订单附件 -->
+    <select id="getOrderFiles" resultType="map">
+        SELECT f.ID AS id, f.NAME AS name, f.URL AS url
+        FROM tb_flow_file f
+        WHERE f.business_id = #{settlementId}
+          AND f.business_name = 'orderDoc'
           AND IFNULL(f.is_deleted, 0) = 0
     </select>
 

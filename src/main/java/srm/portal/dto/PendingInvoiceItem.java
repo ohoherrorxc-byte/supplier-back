@@ -23,6 +23,8 @@ public class PendingInvoiceItem {
     private String unitName;
     private Integer acceptCategory;
     private Integer acceptStatus;
+    private String projectName;
+    private String purchaseOrderType;
 
     public PendingInvoiceItem() {
     }
@@ -145,5 +147,21 @@ public class PendingInvoiceItem {
 
     public void setAcceptStatus(Integer acceptStatus) {
         this.acceptStatus = acceptStatus;
+    }
+
+    public String getProjectName() {
+        return projectName != null ? projectName.replace("&amp;", "&") : null;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
+    }
+
+    public String getPurchaseOrderType() {
+        return purchaseOrderType;
+    }
+
+    public void setPurchaseOrderType(String purchaseOrderType) {
+        this.purchaseOrderType = purchaseOrderType;
     }
 }

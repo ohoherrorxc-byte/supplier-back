@@ -53,7 +53,8 @@ public interface InvoiceMapper {
                                @Param("remark") String remark,
                                @Param("createUser") Long createUser,
                                @Param("createDept") String createDept,
-                               @Param("acceptDetailIds") String acceptDetailIds);
+                               @Param("acceptDetailIds") String acceptDetailIds,
+                               @Param("acceptApplyNo") String acceptApplyNo);
 
     /**
      * 获取刚插入的结算单ID
@@ -130,6 +131,11 @@ public interface InvoiceMapper {
      * 获取结算单的完工单附件
      */
     List<Map<String, Object>> getCompletionFiles(@Param("settlementId") Long settlementId);
+
+    /**
+     * 获取结算单的订单附件
+     */
+    List<Map<String, Object>> getOrderFiles(@Param("settlementId") Long settlementId);
 
     /**
      * 获取结算单备注

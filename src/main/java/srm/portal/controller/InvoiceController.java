@@ -158,6 +158,12 @@ public class InvoiceController {
             Map<String, Object> result = transactionTemplate.execute(status -> {
                 String settlementNo = generateSettlementNo(supplierNo);
 
+                // 获取验收申请编号（从发票行中获取，所有行应一致）
+                String acceptApplyNo = null;
+                if (invoiceLines != null && !invoiceLines.isEmpty() && invoiceLines.get(0).getAcceptApplyNo() != null) {
+                    acceptApplyNo = invoiceLines.get(0).getAcceptApplyNo();
+                }
+
                 // 插入结算单头
                 invoiceMapper.insertSettlementOrder(
                     settlementNo,
@@ -170,7 +176,8 @@ public class InvoiceController {
                     req.getRemark(),
                     userId,
                     req.getCreateDept(),
-                    detailIdsJson
+                    detailIdsJson,
+                    acceptApplyNo
                 );
 
                 long settlementId = invoiceMapper.getLastInsertId();
@@ -228,6 +235,21 @@ public class InvoiceController {
                     }
                 }
 
+                // 插入订单附件（新建记录）
+                List<CompletionFileRequest> orderFiles = req.getOrderFiles();
+                if (orderFiles != null && !orderFiles.isEmpty()) {
+                    for (CompletionFileRequest file : orderFiles) {
+                        invoiceMapper.insertCompletionFile(
+                            System.currentTimeMillis(),
+                            settlementId,
+                            "orderDoc",
+                            file.getUrl(),
+                            file.getName(),
+                            userId
+                        );
+                    }
+                }
+
                 Map<String, Object> r = new HashMap<>();
                 r.put("settlementId", settlementId);
                 r.put("settlementNo", settlementNo);
@@ -275,11 +297,13 @@ public class InvoiceController {
             List<SettlementInvoiceLine> invoiceLines = invoiceMapper.getSettlementInvoiceLines(id);
             List<SettlementDetailItem> details = invoiceMapper.getSettlementDetails(id);
             List<Map<String, Object>> completionFiles = invoiceMapper.getCompletionFiles(id);
+            List<Map<String, Object>> orderFiles = invoiceMapper.getOrderFiles(id);
             String remark = invoiceMapper.getSettlementRemark(id);
             Map<String, Object> result = new HashMap<>();
             result.put("invoiceLines", invoiceLines);
             result.put("details", details);
             result.put("completionFiles", completionFiles);
+            result.put("orderFiles", orderFiles);
             result.put("remark", remark);
             return ResponseEntity.ok(result);
         } catch (Exception e) {

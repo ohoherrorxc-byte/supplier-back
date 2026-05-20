@@ -18,6 +18,7 @@ public class CreateSettlementRequest {
     private List<Long> acceptDetailIds;
     private List<SettlementInvoiceLineRequest> invoiceLines;
     private List<CompletionFileRequest> completionFiles;
+    private List<CompletionFileRequest> orderFiles;
 
     public Long getUserId() {
         return userId;
@@ -105,5 +106,13 @@ public class CreateSettlementRequest {
 
     public void setCompletionFiles(List<CompletionFileRequest> completionFiles) {
         this.completionFiles = completionFiles;
+    }
+
+    public List<CompletionFileRequest> getOrderFiles() {
+        return orderFiles;
+    }
+
+    public void setOrderFiles(List<CompletionFileRequest> orderFiles) {
+        this.orderFiles = orderFiles;
     }
 }
