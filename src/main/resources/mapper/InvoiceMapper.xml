@@ -138,7 +138,7 @@
                a.STATUS AS accept_status,
                bc.SUPPLIER_NO AS supplier_no,
                bc.SUPPLIER_NAME AS supplier_name,
-               a.BOM_PURCHASE_CONTRACT_NO AS contract_no,
+               a.BOM_PURCHASE_ORDER_NO AS contract_no,
                a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
                a.PROCESS_INSTANCE_ID AS process_instance_id,
@@ -152,7 +152,7 @@
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
-          AND COALESCE(hp.END_TIME_, a.CREATE_TIME) >= '2026-05-18 00:00:00'
+          AND COALESCE(a.CREATE_TIME) >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
