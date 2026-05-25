@@ -19,6 +19,7 @@ public class AuthFilter implements Filter {
             "/api/auth/login",
             "/api/auth/logout",
             "/api/auth/change-password",
+            "/api/file/completion-slip-docx",
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs"

@@ -7,6 +7,7 @@
     <resultMap id="PendingInvoiceItemResultMap" type="srm.portal.dto.PendingInvoiceItem">
         <id property="acceptDetailId" column="accept_detail_id"/>
         <result property="acceptApplyNo" column="accept_apply_no"/>
+        <result property="docTitle" column="doc_title"/>
         <result property="partsNo" column="parts_no"/>
         <result property="partsName" column="parts_name"/>
         <result property="remark" column="remark"/>
@@ -59,6 +60,7 @@
     <select id="listPendingInvoiceGeneral" resultMap="PendingInvoiceItemResultMap">
         SELECT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
                d.PARTS_NO AS parts_no,
                d.PARTS_NAME AS parts_name,
                d.REMARK AS remark,
@@ -128,6 +130,7 @@
     <select id="listPendingInvoiceBom" resultMap="PendingInvoiceItemResultMap">
         SELECT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
                d.PARTS_NO AS parts_no,
                d.PARTS_NAME AS parts_name,
                d.REMARK AS remark,

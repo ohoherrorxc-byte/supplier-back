@@ -10,6 +10,7 @@ public class PendingInvoiceItem {
 
     private Long acceptDetailId;
     private String acceptApplyNo;
+    private String docTitle;
     private String partsNo;
     private String partsName;
     private String remark;
@@ -43,6 +44,14 @@ public class PendingInvoiceItem {
 
     public void setAcceptApplyNo(String acceptApplyNo) {
         this.acceptApplyNo = acceptApplyNo;
+    }
+
+    public String getDocTitle() {
+        return docTitle != null ? docTitle.replace("&amp;", "&") : null;
+    }
+
+    public void setDocTitle(String docTitle) {
+        this.docTitle = docTitle;
     }
 
     public String getPartsNo() {

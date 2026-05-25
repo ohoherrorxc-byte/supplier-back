@@ -17,6 +17,8 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/file")
@@ -155,5 +157,59 @@ public class FileController {
         result.put("items", new ArrayList<>());
         result.put("total", 0);
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 生成完工单Word文档下载
+     */
+    @GetMapping("/completion-slip-docx")
+    public ResponseEntity<byte[]> downloadCompletionSlipDocx(
+            @RequestParam(required = false) String docTitle,
+            @RequestParam(required = false) String acceptAmountRmb,
+            @RequestParam(required = false) String contractNo
+    ) {
+        try {
+            org.apache.poi.xwpf.usermodel.XWPFDocument document = new org.apache.poi.xwpf.usermodel.XWPFDocument();
+            org.apache.poi.xwpf.usermodel.XWPFParagraph title = document.createParagraph();
+            title.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+            org.apache.poi.xwpf.usermodel.XWPFRun titleRun = title.createRun();
+            titleRun.setText(docTitle != null ? docTitle : "完工单");
+            titleRun.setFontSize(16);
+            titleRun.setBold(true);
+
+            org.apache.poi.xwpf.usermodel.XWPFTable table = document.createTable(7, 2);
+            table.setWidth("100%");
+
+            String[][] rows = {
+                {"甲方公司名称", "上汽海外出行科技有限公司"},
+                {"项目进度", "已完成服务"},
+                {"开票内容", ""},
+                {"发票类型", "增值税专用发票"},
+                {"税率", "6%"},
+                {"开票金额(含税)", "¥" + (acceptAmountRmb != null ? acceptAmountRmb : "0.00")},
+                {"合同号", contractNo != null ? contractNo : ""}
+            };
+
+            for (int i = 0; i < rows.length; i++) {
+                org.apache.poi.xwpf.usermodel.XWPFTableRow row = table.getRow(i);
+                row.getCell(0).setText(rows[i][0]);
+                row.getCell(1).setText(rows[i][1]);
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            document.write(baos);
+            document.close();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+            String filename = (docTitle != null && !docTitle.isBlank()) ? docTitle + ".docx" : "完工单.docx";
+            headers.setContentDisposition(ContentDisposition.builder("attachment")
+                .filename(filename, StandardCharsets.UTF_8).build());
+
+            return new ResponseEntity<>(baos.toByteArray(), headers, HttpStatus.OK);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 }
