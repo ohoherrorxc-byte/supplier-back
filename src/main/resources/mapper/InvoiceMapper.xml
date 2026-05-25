@@ -80,12 +80,13 @@
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
-        LEFT JOIN `act_hi_procinst` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         LEFT JOIN tb_purchase_contract_detail pcd ON a.PURCHASE_APPLY_NO = pcd.PURCHASE_NO AND pcd.IS_DELETED = 0
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
           AND a.CREATE_TIME >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
@@ -115,6 +116,7 @@
           AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
           AND a.CREATE_TIME >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
@@ -150,11 +152,12 @@
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
-        LEFT JOIN `act_hi_procinst` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
           AND COALESCE(a.CREATE_TIME) >= '2026-05-18 00:00:00'
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
