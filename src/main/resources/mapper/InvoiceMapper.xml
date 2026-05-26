@@ -85,9 +85,6 @@
           <if test="acceptApplyNo != null and acceptApplyNo != ''">
               AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
           </if>
-          <if test="orderNo != null and orderNo != ''">
-              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
-          </if>
           <if test="partsNo != null and partsNo != ''">
               AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
           </if>
@@ -112,7 +109,7 @@
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                pc.SUPPLIER_NO AS supplier_no,
-               pc.SUPPLIER_NAME AS supplier_name,
+               cs.SUPPLIER_NAME AS supplier_name,
                a.PURCHASE_CONTRACT_NO AS contract_no,
                a.PURCHASE_CONTRACT_NAME AS contract_name,
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
@@ -122,6 +119,7 @@
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        LEFT JOIN tb_contract_supplier cs ON pc.SUPPLIER_NO = cs.SUPPLIER_NO AND cs.IS_DELETED = 0
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         LEFT JOIN tb_purchase_contract_detail pcd ON a.PURCHASE_APPLY_NO = pcd.PURCHASE_NO AND pcd.IS_DELETED = 0
         WHERE a.STATUS = 1
@@ -146,17 +144,19 @@
           <if test="acceptApplyNo != null and acceptApplyNo != ''">
               AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
           </if>
-          <if test="orderNo != null and orderNo != ''">
-              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
-          </if>
           <if test="partsNo != null and partsNo != ''">
               AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
           </if>
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
+          <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
+              AND a.APPLY_NO IN
+              <foreach collection="acceptApplyNos" item="no" open="(" separator="," close=")">
+                  #{no}
+              </foreach>
+          </if>
         ORDER BY hp.END_TIME_ DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!-- 根据验收单号列表查询待开票明细 - BOM采购 -->
