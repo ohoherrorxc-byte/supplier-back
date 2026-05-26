@@ -287,8 +287,8 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 根据验收单号列表查询待开票明细 - BOM采购 -->
-    <select id="listPendingInvoiceBomByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
+    <!-- 根据验收单号列表查询待开票明细 - BOM采购（带验收单号过滤） -->
+    <select id="listPendingInvoiceBomByAcceptApplyNosWithFilter" resultMap="PendingInvoiceItemResultMap">
         SELECT DISTINCT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
                a.DOC_TITLE AS doc_title,
