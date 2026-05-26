@@ -30,11 +30,12 @@ public class InvoiceController {
     }
 
     /**
-     * 查询待开票清单 - 一般采购
+     * 查询待开票清单 - 一般采购（按验收单号分页，同一验收单不会被拆散）
      */
     @GetMapping("/pending/general")
     public ResponseEntity<PendingInvoiceResponse> listPendingInvoiceGeneral(
             @RequestParam Long userId,
+            @RequestParam(required = false) String acceptApplyNo,
             @RequestParam(required = false) String partsNo,
             @RequestParam(required = false) String partsName,
             @RequestParam(defaultValue = "20") int pageSize,
@@ -42,12 +43,19 @@ public class InvoiceController {
     ) {
         try {
             String supplierNo = getSupplierNoByUserId(userId);
+            boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
             int offset = (pageNum - 1) * pageSize;
 
-            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneral(
-                supplierNo, partsNo, partsName, pageSize, offset);
-            long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo);
+            // 先按验收单号分页查询（不查明细）
+            List<String> applyNos = invoiceMapper.listPendingInvoiceGeneralByPage(
+                supplierNo, acceptApplyNo, partsNo, partsName, isAdmin, pageSize, offset);
 
+            // 根据验收单号列表查询所有明细
+            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNos(
+                supplierNo, acceptApplyNo, partsNo, partsName, isAdmin, applyNos);
+
+            // 总数使用专门的数量统计查询
+            long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo, isAdmin);
             PendingInvoiceResponse resp = new PendingInvoiceResponse();
             resp.setItems(items);
             resp.setTotal(total);
@@ -59,27 +67,41 @@ public class InvoiceController {
     }
 
     /**
-     * 查询待开票清单 - BOM采购
+     * 查询待开票清单 - BOM采购（按验收单号分页，同一验收单不会被拆散）
      */
     @GetMapping("/pending/bom")
     public ResponseEntity<PendingInvoiceResponse> listPendingInvoiceBom(
             @RequestParam Long userId,
+            @RequestParam(required = false) String acceptApplyNo,
+            @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String partsNo,
             @RequestParam(required = false) String partsName,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(defaultValue = "1") int pageNum
     ) {
-        String supplierNo = getSupplierNoByUserId(userId);
-        int offset = (pageNum - 1) * pageSize;
+        try {
+            String supplierNo = getSupplierNoByUserId(userId);
+            boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            int offset = (pageNum - 1) * pageSize;
 
-        List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBom(
-            supplierNo, partsNo, partsName, pageSize, offset);
-        long total = invoiceMapper.countPendingInvoiceBom(supplierNo);
+            // 先按验收单号分页查询（不查明细）
+            List<String> applyNos = invoiceMapper.listPendingInvoiceBomByPage(
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, isAdmin, pageSize, offset);
 
-        PendingInvoiceResponse resp = new PendingInvoiceResponse();
-        resp.setItems(items);
-        resp.setTotal(total);
-        return ResponseEntity.ok(resp);
+            // 根据验收单号列表查询所有明细
+            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByAcceptApplyNos(
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, isAdmin, applyNos);
+
+            // 总数使用专门的数量统计查询
+            long total = invoiceMapper.countPendingInvoiceBom(supplierNo, isAdmin);
+            PendingInvoiceResponse resp = new PendingInvoiceResponse();
+            resp.setItems(items);
+            resp.setTotal(total);
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(null);
+        }
     }
 
     /**
@@ -91,6 +113,52 @@ public class InvoiceController {
             return null;
         }
         return invoiceMapper.getSupplierNoBySupplierId(supplierId);
+    }
+
+    /**
+     * 获取待开票数量统计（按验收单号去重）
+     */
+    @GetMapping("/pending/count")
+    public ResponseEntity<Map<String, Long>> getPendingInvoiceCount(@RequestParam Long userId) {
+        String supplierNo = getSupplierNoByUserId(userId);
+        boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+        long generalCount = invoiceMapper.countPendingInvoiceGeneral(supplierNo, isAdmin);
+        long bomCount = invoiceMapper.countPendingInvoiceBom(supplierNo, isAdmin);
+        Map<String, Long> result = new HashMap<>();
+        result.put("general", generalCount);
+        result.put("bom", bomCount);
+        result.put("total", generalCount + bomCount);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 获取工作台消息列表（待确认订单号 + 待开票验收单号）
+     */
+    @GetMapping("/dashboard/messages")
+    public ResponseEntity<List<Map<String, Object>>> getDashboardMessages(@RequestParam Long userId) {
+        String supplierNo = getSupplierNoByUserId(userId);
+        boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+        List<Map<String, Object>> messages = new ArrayList<>();
+
+        // 待确认订单
+        List<String> orderNos = invoiceMapper.listPendingOrderApplyNos(supplierNo, 0, 5, 0);
+        for (String no : orderNos) {
+            messages.add(Map.of("type", "order", "no", no, "text", "订单 " + no + " 待确认"));
+        }
+
+        // 一般采购待开票
+        List<String> generalNos = invoiceMapper.listPendingInvoiceGeneralApplyNos(supplierNo, isAdmin, 5);
+        for (String no : generalNos) {
+            messages.add(Map.of("type", "general", "no", no, "text", "一般采购 " + no + " 待开票"));
+        }
+
+        // BOM采购待开票
+        List<String> bomNos = invoiceMapper.listPendingInvoiceBomApplyNos(supplierNo, isAdmin, 5);
+        for (String no : bomNos) {
+            messages.add(Map.of("type", "bom", "no", no, "text", "生产采购 " + no + " 待开票"));
+        }
+
+        return ResponseEntity.ok(messages);
     }
 
     /**

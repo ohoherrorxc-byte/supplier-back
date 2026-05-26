@@ -56,9 +56,51 @@
         <result property="totalAmount" column="total_amount"/>
     </resultMap>
 
-    <!-- 查询待开票清单 - 一般采购 -->
-    <select id="listPendingInvoiceGeneral" resultMap="PendingInvoiceItemResultMap">
-        SELECT d.ID AS accept_detail_id,
+    <!-- 查询待开票清单 - 一般采购（按验收单号分页） -->
+    <select id="listPendingInvoiceGeneralByPage" resultType="string">
+        SELECT DISTINCT a.APPLY_NO
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_purchase_contract_pay pcp
+              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+        ORDER BY hp.END_TIME_ DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 根据验收单号列表查询待开票明细 - 一般采购 -->
+    <select id="listPendingInvoiceGeneralByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
+        SELECT DISTINCT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
                a.DOC_TITLE AS doc_title,
                d.PARTS_NO AS parts_no,
@@ -87,14 +129,25 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
                 AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_purchase_contract_pay pcp
+              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
           </if>
           <if test="partsNo != null and partsNo != ''">
               AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
@@ -106,31 +159,9 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 统计待开票清单 - 一般采购 -->
-    <select id="countPendingInvoiceGeneral" resultType="long">
-        SELECT COUNT(*)
-        FROM tb_accept_apply_detail d
-        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
-        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
-        WHERE a.STATUS = 1
-          AND a.ACCEPT_CATEGORY = 1
-          AND d.IS_DELETED = 0
-          AND a.IS_DELETED = 0
-          AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
-          AND NOT EXISTS (
-              SELECT 1 FROM tb_settlement_order s
-              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
-                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
-          )
-          <if test="supplierNo != null and supplierNo != ''">
-              AND pc.SUPPLIER_NO = #{supplierNo}
-          </if>
-    </select>
-
-    <!-- 查询待开票清单 - BOM采购 -->
-    <select id="listPendingInvoiceBom" resultMap="PendingInvoiceItemResultMap">
-        SELECT d.ID AS accept_detail_id,
+    <!-- 根据验收单号列表查询待开票明细 - BOM采购 -->
+    <select id="listPendingInvoiceBomByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
+        SELECT DISTINCT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
                a.DOC_TITLE AS doc_title,
                d.PARTS_NO AS parts_no,
@@ -152,20 +183,99 @@
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND COALESCE(a.CREATE_TIME) >= '2026-05-18 00:00:00'
+          AND COALESCE(po.CREATE_TIME) >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
                 AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+    </select>
+
+    <select id="countPendingInvoiceGeneral" resultType="long">
+        SELECT COUNT(DISTINCT a.APPLY_NO)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_purchase_contract_pay pcp
+              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <!-- 查询待开票清单 - BOM采购（按验收单号分页） -->
+    <select id="listPendingInvoiceBomByPage" resultType="string">
+        SELECT DISTINCT a.APPLY_NO
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        inner JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
+          AND COALESCE(po.CREATE_TIME) >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
           </if>
           <if test="partsNo != null and partsNo != ''">
               AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
@@ -177,25 +287,182 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 统计待开票清单 - BOM采购 -->
-    <select id="countPendingInvoiceBom" resultType="long">
-        SELECT COUNT(*)
+    <!-- 根据验收单号列表查询待开票明细 - BOM采购 -->
+    <select id="listPendingInvoiceBomByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
+        SELECT DISTINCT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               bc.SUPPLIER_NO AS supplier_no,
+               bc.SUPPLIER_NAME AS supplier_name,
+               a.BOM_PURCHASE_ORDER_NO AS contract_no,
+               a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               (SELECT bom.PROJECT_NAME FROM tb_bom_purchase_order_detail bom WHERE bom.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND bom.IS_DELETED = 0 ORDER BY bom.ID LIMIT 1) AS project_name,
+               (SELECT po.PURCHASE_ORDER_TYPE FROM tb_bom_purchase_order po WHERE po.APPLY_NO = a.BOM_PURCHASE_ORDER_NO AND po.IS_DELETED = 0 LIMIT 1) AS purchase_order_type
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-18 00:00:00'
+          AND bc.IS_DELETED = 0
+          AND COALESCE(po.CREATE_TIME) >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order s
               WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
                 AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+          <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
+              AND a.APPLY_NO IN
+              <foreach collection="acceptApplyNos" item="no" open="(" separator="," close=")">
+                  #{no}
+              </foreach>
+          </if>
+        ORDER BY hp.END_TIME_ DESC
+    </select>
+
+    <!-- 统计待开票清单 - BOM采购 -->
+    <select id="countPendingInvoiceBom" resultType="long">
+        SELECT COUNT(DISTINCT a.APPLY_NO)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        inner JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND po.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <!-- 获取待确认订单号列表 -->
+    <select id="listPendingOrderApplyNos" resultType="string">
+        SELECT DISTINCT pc.APPLY_NO
+        FROM tb_purchase_order a
+        INNER JOIN tb_purchase_contract pc ON a.CONTRACT_NO = pc.APPLY_NO AND pc.IS_DELETED = 0
+        WHERE a.STATUS = 0
+          AND IFNULL(a.IS_DELETED, 0) = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+        ORDER BY a.CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计待确认订单数量 -->
+    <select id="countPendingOrders" resultType="long">
+        SELECT COUNT(DISTINCT pc.APPLY_NO)
+        FROM tb_purchase_order a
+        INNER JOIN tb_purchase_contract pc ON a.CONTRACT_NO = pc.APPLY_NO AND pc.IS_DELETED = 0
+        WHERE a.STATUS = 0
+          AND IFNULL(a.IS_DELETED, 0) = 0
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <!-- 获取待开票清单 - 一般采购（验收单号列表） -->
+    <select id="listPendingInvoiceGeneralApplyNos" resultType="string">
+        SELECT DISTINCT a.PURCHASE_CONTRACT_NO
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
+          AND a.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_purchase_contract_pay pcp
+              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+        ORDER BY a.CREATE_TIME DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取待开票清单 - BOM采购（验收单号列表） -->
+    <select id="listPendingInvoiceBomApplyNos" resultType="string">
+        SELECT DISTINCT a.BOM_PURCHASE_ORDER_NO
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
+          AND po.CREATE_TIME >= '2026-05-10 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order s
+              WHERE s.IS_DELETED = 0 AND s.STATUS >= 1
+                AND JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+        ORDER BY a.CREATE_TIME DESC
+        LIMIT #{limit}
     </select>
 
     <!-- 创建结算单 -->

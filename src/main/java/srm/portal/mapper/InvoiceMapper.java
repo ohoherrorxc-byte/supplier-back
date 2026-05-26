@@ -9,36 +9,99 @@ import java.util.Map;
 public interface InvoiceMapper {
 
     /**
-     * 查询待开票清单 - 一般采购
+     * 查询待开票清单 - 一般采购（按验收单号分页）
      */
-    List<PendingInvoiceItem> listPendingInvoiceGeneral(
+    List<String> listPendingInvoiceGeneralByPage(
             @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
             @Param("partsNo") String partsNo,
             @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin,
             @Param("limit") int limit,
             @Param("offset") int offset
     );
 
     /**
-     * 统计待开票清单 - 一般采购
+     * 根据验收单号列表查询待开票明细 - 一般采购
      */
-    long countPendingInvoiceGeneral(@Param("supplierNo") String supplierNo);
-
-    /**
-     * 查询待开票清单 - BOM采购
-     */
-    List<PendingInvoiceItem> listPendingInvoiceBom(
+    List<PendingInvoiceItem> listPendingInvoiceGeneralByAcceptApplyNos(
             @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
             @Param("partsNo") String partsNo,
             @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("acceptApplyNos") List<String> acceptApplyNos
+    );
+
+    /**
+     * 统计待开票清单 - 一般采购（按验收单号去重）
+     */
+    long countPendingInvoiceGeneral(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
+
+    /**
+     * 获取待确认订单号列表（分页）
+     */
+    List<String> listPendingOrderApplyNos(
+            @Param("supplierNo") String supplierNo,
+            @Param("status") Integer status,
             @Param("limit") int limit,
             @Param("offset") int offset
+    );
+
+    /**
+     * 统计待确认订单数量
+     */
+    long countPendingOrders(@Param("supplierNo") String supplierNo, @Param("status") Integer status);
+
+    /**
+     * 获取待开票清单 - 一般采购（验收单号列表，用于消息展示）
+     */
+    List<String> listPendingInvoiceGeneralApplyNos(
+            @Param("supplierNo") String supplierNo,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("limit") int limit
+    );
+
+    /**
+     * 获取待开票清单 - BOM采购（验收单号列表，用于消息展示）
+     */
+    List<String> listPendingInvoiceBomApplyNos(
+            @Param("supplierNo") String supplierNo,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("limit") int limit
+    );
+
+    /**
+     * 查询待开票清单 - BOM采购（按验收单号分页）
+     */
+    List<String> listPendingInvoiceBomByPage(
+            @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("orderNo") String orderNo,
+            @Param("partsNo") String partsNo,
+            @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("limit") int limit,
+            @Param("offset") int offset
+    );
+
+    /**
+     * 根据验收单号列表查询待开票明细 - BOM采购
+     */
+    List<PendingInvoiceItem> listPendingInvoiceBomByAcceptApplyNos(
+            @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("orderNo") String orderNo,
+            @Param("partsNo") String partsNo,
+            @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("acceptApplyNos") List<String> acceptApplyNos
     );
 
     /**
      * 统计待开票清单 - BOM采购
      */
-    long countPendingInvoiceBom(@Param("supplierNo") String supplierNo);
+    long countPendingInvoiceBom(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
 
     /**
      * 创建结算单
