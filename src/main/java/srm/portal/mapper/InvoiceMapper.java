@@ -131,6 +131,9 @@ public interface InvoiceMapper {
             @Param("supplierNo") String supplierNo,
             @Param("settlementNo") String settlementNo,
             @Param("status") Integer status,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("bomOrderNo") String bomOrderNo,
+            @Param("contractNo") String contractNo,
             @Param("limit") int limit,
             @Param("offset") int offset
     );

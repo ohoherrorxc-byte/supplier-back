@@ -340,6 +340,9 @@ public class InvoiceController {
             @RequestParam Long userId,
             @RequestParam(required = false) String settlementNo,
             @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String acceptApplyNo,
+            @RequestParam(required = false) String bomOrderNo,
+            @RequestParam(required = false) String contractNo,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(defaultValue = "1") int pageNum
     ) {
@@ -347,7 +350,7 @@ public class InvoiceController {
         int offset = (pageNum - 1) * pageSize;
 
         List<SettlementOrderItem> items = invoiceMapper.listSettlementOrders(
-            supplierNo, settlementNo, status, pageSize, offset);
+            supplierNo, settlementNo, status, acceptApplyNo, bomOrderNo, contractNo, pageSize, offset);
         long total = invoiceMapper.countSettlementOrders(supplierNo);
 
         SettlementOrderResponse resp = new SettlementOrderResponse();

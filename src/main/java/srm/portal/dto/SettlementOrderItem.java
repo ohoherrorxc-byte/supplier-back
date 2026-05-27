@@ -16,6 +16,9 @@ public class SettlementOrderItem {
     private BigDecimal invoiceTotalAmount;
     private Integer status;
     private LocalDateTime createTime;
+    private String acceptApplyNo;
+    private String bomPurchaseOrderNo;
+    private String contractNo;
 
     public Long getId() {
         return id;
@@ -87,5 +90,29 @@ public class SettlementOrderItem {
 
     public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;
+    }
+
+    public String getAcceptApplyNo() {
+        return acceptApplyNo;
+    }
+
+    public void setAcceptApplyNo(String acceptApplyNo) {
+        this.acceptApplyNo = acceptApplyNo;
+    }
+
+    public String getBomPurchaseOrderNo() {
+        return bomPurchaseOrderNo;
+    }
+
+    public void setBomPurchaseOrderNo(String bomPurchaseOrderNo) {
+        this.bomPurchaseOrderNo = bomPurchaseOrderNo;
+    }
+
+    public String getContractNo() {
+        return contractNo;
+    }
+
+    public void setContractNo(String contractNo) {
+        this.contractNo = contractNo;
     }
 }
