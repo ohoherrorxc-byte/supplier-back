@@ -236,6 +236,9 @@
             o.take_over_connect AS take_over_connect,
             o.connect_number AS connect_number,
             d.storage_name AS storage_name,
+            DATE_FORMAT(d.need_date, '%Y-%m-%d') AS plan_period,
+            DATE_FORMAT(o.create_time, '%Y-%m-%d') AS forecast_release_date,
+            d.need_number AS planned_qty,
             IFNULL(d.delivery_number, 0) AS shipped_qty,
             COALESCE((SELECT SUM(s.shipped_qty) FROM tb_srm_asn_line s WHERE s.split_line_id IN (SELECT id FROM tb_srm_po_split_line WHERE detail_id = d.id)), 0)
             + COALESCE((SELECT SUM(a.ship_qty) FROM tb_srm_asn a WHERE a.order_detail_id = d.id AND IFNULL(a.is_deleted, 0) = 0 AND a.status != 'SHIPPED' AND a.ship_qty IS NOT NULL), 0) AS pending_ship_qty,
@@ -578,10 +581,10 @@
 
     <!-- 查询销售预测列表 -->
     <select id="listSalesForecast" resultType="map">
-        SELECT 
-            d.parts_number AS parts_no,
+        SELECT
+            d.parts_number AS parts_number,
             d.parts_name,
-            DATE_FORMAT(o.need_date, '%Y-%m') AS month,
+            DATE_FORMAT(d.need_date, '%Y-%m') AS forecast_month,
             SUM(d.need_number) AS forecast_qty,
             o.storage_name AS plant
         FROM tb_purchase_parts_order_detail d
@@ -589,7 +592,7 @@
         WHERE o.supplier_id = #{supplierId}
           AND IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
-          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="partsNumber != null and partsNumber.size() > 0">
             AND d.parts_number IN
             <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
@@ -597,25 +600,25 @@
             </foreach>
         </if>
         <if test="startDate != null and startDate != ''">
-            AND o.need_date >= CONCAT(#{startDate}, '-01')
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
         </if>
         <if test="endDate != null and endDate != ''">
-            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
         </if>
-        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(o.need_date, '%Y-%m'), o.storage_name
-        ORDER BY d.parts_number, month
+        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(d.need_date, '%Y-%m'), o.storage_name
+        ORDER BY d.parts_number, forecast_month
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!-- 统计销售预测数量 -->
     <select id="countSalesForecast" resultType="long">
-        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(o.need_date, '%Y-%m')))
+        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(d.need_date, '%Y-%m')))
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
         WHERE o.supplier_id = #{supplierId}
           AND IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
-          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="partsNumber != null and partsNumber.size() > 0">
             AND d.parts_number IN
             <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
@@ -623,28 +626,42 @@
             </foreach>
         </if>
         <if test="startDate != null and startDate != ''">
-            AND o.need_date >= CONCAT(#{startDate}, '-01')
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
         </if>
         <if test="endDate != null and endDate != ''">
-            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
         </if>
     </select>
 
     <!-- 查询采购计划列表 -->
     <select id="listPurchasePlan" resultType="map">
-        SELECT 
-            d.parts_number AS parts_no,
-            d.parts_name,
-            DATE_FORMAT(o.need_date, '%Y-%m') AS month,
-            SUM(d.need_number) AS plan_qty,
-            o.storage_name AS plant,
-            'pending' AS feedback_status
+        SELECT
+            o.id AS order_id,
+            o.order_no AS order_no,
+            DATE_FORMAT(o.create_time, '%Y-%m-%d') AS forecast_release_date,
+            s.SUPPLIER_NAME AS supplier_name,
+            CASE
+                WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
+                WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
+                ELSE 21
+            END AS supplier_order_status
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
-        WHERE o.supplier_id = #{supplierId}
-          AND IFNULL(d.is_deleted, 0) = 0
+        LEFT JOIN tb_contract_supplier s ON o.supplier_id = s.ID
+        WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
-          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+          AND o.require_attr = '预测'
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
         <if test="partsNumber != null and partsNumber.size() > 0">
             AND d.parts_number IN
             <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
@@ -652,28 +669,38 @@
             </foreach>
         </if>
         <if test="startDate != null and startDate != ''">
-            AND o.need_date >= CONCAT(#{startDate}, '-01')
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
         </if>
         <if test="endDate != null and endDate != ''">
-            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
         </if>
         <if test="feedbackStatus != null and feedbackStatus != ''">
             AND 'pending' = #{feedbackStatus}
         </if>
-        GROUP BY d.parts_number, d.parts_name, DATE_FORMAT(o.need_date, '%Y-%m'), o.storage_name
-        ORDER BY d.parts_number, month
+        GROUP BY o.order_no, o.create_time, s.SUPPLIER_NAME
+        ORDER BY o.order_no
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!-- 统计采购计划数量 -->
     <select id="countPurchasePlan" resultType="long">
-        SELECT COUNT(DISTINCT CONCAT(d.parts_number, '-', DATE_FORMAT(o.need_date, '%Y-%m')))
+        SELECT COUNT(DISTINCT o.order_no)
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
-        WHERE o.supplier_id = #{supplierId}
-          AND IFNULL(d.is_deleted, 0) = 0
+        WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
-          AND o.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+          AND o.require_attr = '预测'
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
         <if test="partsNumber != null and partsNumber.size() > 0">
             AND d.parts_number IN
             <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
@@ -681,10 +708,94 @@
             </foreach>
         </if>
         <if test="startDate != null and startDate != ''">
-            AND o.need_date >= CONCAT(#{startDate}, '-01')
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
         </if>
         <if test="endDate != null and endDate != ''">
-            AND o.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="feedbackStatus != null and feedbackStatus != ''">
+            AND 'pending' = #{feedbackStatus}
+        </if>
+    </select>
+
+    <!-- 查询采购计划明细列表 -->
+    <select id="listPurchasePlanDetails" resultType="map">
+        SELECT
+            o.id AS order_id,
+            o.order_no AS order_no,
+            d.id AS detail_id,
+            d.parts_number AS parts_number,
+            d.parts_name,
+            DATE_FORMAT(d.need_date, '%Y-%m-%d') AS plan_period,
+            DATE_FORMAT(o.create_time, '%Y-%m-%d') AS forecast_release_date,
+            d.need_number AS planned_qty,
+            o.storage_name AS plant,
+            d.supplier_order_status
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.require_attr = '预测'
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
+        </if>
+        <if test="feedbackStatus != null and feedbackStatus != ''">
+            AND 'pending' = #{feedbackStatus}
+        </if>
+        ORDER BY o.order_no, d.parts_number, d.need_date
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计采购计划明细数量 -->
+    <select id="countPurchasePlanDetails" resultType="long">
+        SELECT COUNT(d.id)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.require_attr = '预测'
+          AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+        <if test="supplierId != null">
+          AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="orderNo != null and orderNo.size() > 0">
+            AND (
+                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
+                    o.order_no LIKE CONCAT('%', #{on}, '%')
+                </foreach>
+            )
+        </if>
+        <if test="partsNumber != null and partsNumber.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumber" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
         </if>
         <if test="feedbackStatus != null and feedbackStatus != ''">
             AND 'pending' = #{feedbackStatus}
@@ -1155,6 +1266,7 @@
                 </otherwise>
             </choose>
             AS time_key,
+            o.require_attr AS data_type,
             COUNT(DISTINCT o.id) AS order_count,
             SUM(d.need_number) AS total_qty
         FROM tb_purchase_parts_order_detail d
@@ -1162,7 +1274,7 @@
         LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
-          AND o.supplier_order_status != 0  <!-- 只统计已确认的订单 -->
+          AND o.supplier_order_status = 20
         <if test="supplierId != null">
             AND o.supplier_id = #{supplierId}
         </if>
@@ -1184,7 +1296,7 @@
                 #{pn}
             </foreach>
         </if>
-        GROUP BY COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number), COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name), o.storage_name,
+        GROUP BY COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number), COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name), o.storage_name, o.require_attr,
         <choose>
             <when test="granularity == 'month'">
                 DATE_FORMAT(d.need_date, '%Y-%m')

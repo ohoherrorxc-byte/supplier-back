@@ -385,6 +385,7 @@ public class OrderCollaborationRepository {
             String partsName = (String) row.get("parts_name");
             String demandFactory = (String) row.get("demand_factory");
             String timeKey = (String) row.get("time_key");
+            String dataType = (String) row.get("data_type");
 
             // 跳过无效数据
             if (partsNumber == null || partsNumber.isEmpty()) {
@@ -393,6 +394,8 @@ public class OrderCollaborationRepository {
 
             // 处理 null 的 demandFactory
             String safeDemandFactory = (demandFactory != null && !demandFactory.isEmpty()) ? demandFactory : "未知工厂";
+
+            // 构造key：零件号_需求工厂
             String key = partsNumber + "_" + safeDemandFactory;
 
             Map<String, Object> pivotRow = pivotMap.computeIfAbsent(key, k -> {
@@ -400,6 +403,8 @@ public class OrderCollaborationRepository {
                 newRow.put("partsNumber", partsNumber);
                 newRow.put("partsName", partsName != null ? partsName : "");
                 newRow.put("demandFactory", safeDemandFactory);
+                newRow.put("hasOrder", false);
+                newRow.put("hasForecast", false);
                 newRow.put("total", 0);
                 return newRow;
             });
@@ -411,23 +416,45 @@ public class OrderCollaborationRepository {
                 totalQty = ((Number) totalQtyObj).intValue();
             }
 
-            // 设置时间列的值
-            if (timeKey != null && !timeKey.isEmpty()) {
-                Object existing = pivotRow.get(timeKey);
-                int existingValue = (existing != null) ? ((Number) existing).intValue() : 0;
-                pivotRow.put(timeKey, existingValue + totalQty);
+            // 标记数据类型
+            if ("预测".equals(dataType)) {
+                pivotRow.put("hasForecast", true);
+            } else {
+                pivotRow.put("hasOrder", true);
             }
 
-            // 累加总数
+            // 设置时间列的值（如果同时间段已有订单数据，预测数据不覆盖）
+            if (timeKey != null && !timeKey.isEmpty()) {
+                Object existing = pivotRow.get(timeKey + "_order");
+                Object existingForecast = pivotRow.get(timeKey + "_forecast");
+                if (existing == null && existingForecast == null) {
+                    if ("预测".equals(dataType)) {
+                        pivotRow.put(timeKey + "_forecast", totalQty);
+                    } else {
+                        pivotRow.put(timeKey + "_order", totalQty);
+                    }
+                } else if (existing == null && !"预测".equals(dataType)) {
+                    pivotRow.put(timeKey + "_order", totalQty);
+                } else if (existingForecast == null && "预测".equals(dataType)) {
+                    pivotRow.put(timeKey + "_forecast", totalQty);
+                }
+            }
+
+            // 累加总数（不区分订单和预测）
             Object totalObj = pivotRow.get("total");
             int currentTotal = (totalObj != null) ? ((Number) totalObj).intValue() : 0;
             pivotRow.put("total", currentTotal + totalQty);
         }
 
-        // 确保所有时间标签列都存在
+        // 确保所有时间标签列都存在，并合并订单和预测数据
         for (Map<String, Object> row : pivotMap.values()) {
             for (String timeLabel : timeLabels) {
-                row.putIfAbsent(timeLabel, 0);
+                Object orderVal = row.remove(timeLabel + "_order");
+                Object forecastVal = row.remove(timeLabel + "_forecast");
+                int combined = 0;
+                if (orderVal != null) combined += ((Number) orderVal).intValue();
+                if (forecastVal != null) combined += ((Number) forecastVal).intValue();
+                row.put(timeLabel, combined);
             }
         }
 
@@ -442,8 +469,10 @@ public class OrderCollaborationRepository {
         List<Map<String, Object>> series = new java.util.ArrayList<>();
 
         for (Map<String, Object> row : pivotData) {
-            String partsNumber = (String) row.get("partsNumber");   
-            String name = partsNumber ;
+            String partsNumber = (String) row.get("partsNumber");
+            String name = partsNumber;
+            Boolean hasOrder = (Boolean) row.get("hasOrder");
+            Boolean hasForecast = (Boolean) row.get("hasForecast");
 
             List<Integer> data = new java.util.ArrayList<>();
             for (String timeLabel : timeLabels) {
@@ -451,7 +480,7 @@ public class OrderCollaborationRepository {
                 data.add(value != null ? ((Number) value).intValue() : 0);
             }
 
-            series.add(Map.of("name", name, "data", data));
+            series.add(Map.of("name", name, "data", data, "hasOrder", hasOrder, "hasForecast", hasForecast));
         }
 
         return Map.of("xAxis", xAxis, "series", series);
