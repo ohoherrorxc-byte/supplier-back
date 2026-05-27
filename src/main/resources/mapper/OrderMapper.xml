@@ -82,6 +82,9 @@
         <if test="endDate != null and endDate != ''">
             AND tb_purchase_parts_order.order_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
         </if>
+        <if test="requireAttr != null and requireAttr != ''">
+            AND tb_purchase_parts_order.require_attr = #{requireAttr}
+        </if>
         <if test="sortField != null and sortField != '' and sortOrder != null and sortOrder != ''">
             ORDER BY
             <choose>
@@ -140,6 +143,9 @@
         <if test="endDate != null and endDate != ''">
             AND tb_purchase_parts_order.order_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
         </if>
+        <if test="requireAttr != null and requireAttr != ''">
+            AND tb_purchase_parts_order.require_attr = #{requireAttr}
+        </if>
     </select>
 
     <!-- 查询订单汇总统计 -->
@@ -158,6 +164,7 @@
         WHERE IFNULL(o.is_deleted, 0) = 0
           AND IFNULL(d.is_deleted, 0) = 0
           AND o.order_status = 1
+          AND o.require_attr = '订单'
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
         </if>
@@ -357,6 +364,9 @@
         <if test="endDate != null and endDate != ''">
             AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
         </if>
+        <if test="requireAttr != null and requireAttr != ''">
+            AND o.require_attr = #{requireAttr}
+        </if>
         <if test="sortField != null and sortField != '' and sortOrder != null and sortOrder != ''">
             ORDER BY
             <choose>
@@ -409,6 +419,9 @@
         </if>
         <if test="endDate != null and endDate != ''">
             AND o.create_time &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+        <if test="requireAttr != null and requireAttr != ''">
+            AND o.require_attr = #{requireAttr}
         </if>
     </select>
 

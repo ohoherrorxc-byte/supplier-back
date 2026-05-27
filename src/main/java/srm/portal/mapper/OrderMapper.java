@@ -19,6 +19,7 @@ public interface OrderMapper {
             @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
+            @Param("requireAttr") String requireAttr,
             @Param("limit") int limit,
             @Param("offset") int offset,
             @Param("sortField") String sortField,
@@ -35,7 +36,8 @@ public interface OrderMapper {
             @Param("supplierName") String supplierName,
             @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
-            @Param("endDate") String endDate
+            @Param("endDate") String endDate,
+            @Param("requireAttr") String requireAttr
     );
 
     /**
@@ -79,6 +81,7 @@ public interface OrderMapper {
             @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
+            @Param("requireAttr") String requireAttr,
             @Param("limit") int limit,
             @Param("offset") int offset,
             @Param("sortField") String sortField,
@@ -95,7 +98,8 @@ public interface OrderMapper {
             @Param("supplierOrderStatus") Integer supplierOrderStatus,
             @Param("deliveryStatus") List<String> deliveryStatus,
             @Param("startDate") String startDate,
-            @Param("endDate") String endDate
+            @Param("endDate") String endDate,
+            @Param("requireAttr") String requireAttr
     );
 
     /**

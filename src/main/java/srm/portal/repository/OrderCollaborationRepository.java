@@ -31,14 +31,15 @@ public class OrderCollaborationRepository {
             List<String> deliveryStatus,
             String startDate,
             String endDate,
+            String requireAttr,
             int limit,
             int offset,
             String sortField,
             String sortOrder
     ) {
-        long total = orderMapper.countOrderDetails(supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate);
+        long total = orderMapper.countOrderDetails(supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate, requireAttr);
         List<Map<String, Object>> items = orderMapper.listOrderDetails(
-                supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate, limit, offset, sortField, sortOrder
+                supplierId, orderNo, partsNumber, supplierOrderStatus, deliveryStatus, startDate, endDate, requireAttr, limit, offset, sortField, sortOrder
         );
         return Map.of("items", items, "total", total);
     }

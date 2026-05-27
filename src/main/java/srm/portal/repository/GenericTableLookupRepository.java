@@ -250,8 +250,8 @@ public class GenericTableLookupRepository {
     }
 
     public Map<String, Object> getDashboardStats(Long supplierId) {
-        // 统计待确认订单 (status = 1)
-        String pendingOrdersSql = "SELECT COUNT(*) FROM tb_purchase_parts_order WHERE supplier_id = ? AND supplier_order_status = 0 AND order_status = 1  AND is_deleted = 0";
+        // 统计待确认订单 (status = 1, requireAttr = '订单')
+        String pendingOrdersSql = "SELECT COUNT(*) FROM tb_purchase_parts_order WHERE supplier_id = ? AND supplier_order_status = 0 AND order_status = 1 AND is_deleted = 0 AND require_attr = '订单'";
         Long pendingOrders = jdbcTemplate.queryForObject(pendingOrdersSql, Long.class, supplierId);
 
         // 统计在途 ASN (SHIPPED / CREATED)，排除已删除
@@ -273,8 +273,8 @@ public class GenericTableLookupRepository {
      * 管理员用的汇总统计（不限供应商）
      */
     public Map<String, Object> getDashboardStatsAll() {
-        // 统计待确认订单 (status = 1)
-        String pendingOrdersSql = "SELECT COUNT(*) FROM tb_purchase_parts_order WHERE supplier_order_status = 0 AND order_status = 1 AND is_deleted = 0";
+        // 统计待确认订单 (status = 1, requireAttr = '订单')
+        String pendingOrdersSql = "SELECT COUNT(*) FROM tb_purchase_parts_order WHERE supplier_order_status = 0 AND order_status = 1 AND is_deleted = 0 AND require_attr = '订单'";
         Long pendingOrders = jdbcTemplate.queryForObject(pendingOrdersSql, Long.class);
 
         // 统计在途 ASN (SHIPPED / CREATED)，排除已删除
