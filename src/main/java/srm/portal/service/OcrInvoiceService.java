@@ -12,6 +12,11 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+
 /**
  * OCR 发票识别服务 - 使用百度智能云 OCR
  * 图片用增值税发票识别，PDF用通用识别
@@ -53,21 +58,45 @@ public class OcrInvoiceService {
             String fileName = file.getOriginalFilename();
             boolean isPdf = fileName != null && fileName.toLowerCase().endsWith(".pdf");
 
+            if (apiKey == null || apiKey.isEmpty() || secretKey == null || secretKey.isEmpty()) {
+                Map<String, Object> result = createEmptyResult("增值税发票 OCR 未配置 API Key");
+                result.put("success", false);
+                return result;
+            }
+
             if (isPdf) {
-                // PDF 用通用识别
-                if (generalApiKey == null || generalApiKey.isEmpty() || generalSecretKey == null || generalSecretKey.isEmpty()) {
-                    Map<String, Object> result = createEmptyResult("通用 OCR 未配置 API Key");
-                    result.put("success", false);
-                    return result;
+                // PDF: 转成图片后用增值税发票识别（1000次配额）
+                List<byte[]> imagePages = pdfToImages(fileBytes);
+                List<Map<String, Object>> allInvoiceResults = new ArrayList<>();
+                Map<String, Object> mergedResult = new HashMap<>();
+
+                for (int i = 0; i < imagePages.size(); i++) {
+                    byte[] pageImage = imagePages.get(i);
+                    Map<String, Object> pageResult = callVatInvoiceOcr(pageImage, "page_" + i + ".png");
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> pageInvoices = (List<Map<String, Object>>) pageResult.get("invoiceResults");
+                    if (pageInvoices != null) {
+                        allInvoiceResults.addAll(pageInvoices);
+                    }
                 }
-                return callGeneralOcr(fileBytes, fileName);
+
+                mergedResult.put("invoiceResults", allInvoiceResults);
+                mergedResult.put("count", allInvoiceResults.size());
+                mergedResult.put("success", !allInvoiceResults.isEmpty());
+                mergedResult.put("message", "PDF 识别到 " + allInvoiceResults.size() + " 条发票");
+                if (!allInvoiceResults.isEmpty()) {
+                    Map<String, Object> first = allInvoiceResults.get(0);
+                    mergedResult.put("invoiceNo", first.get("invoiceNo"));
+                    mergedResult.put("invoiceDate", first.get("invoiceDate"));
+                    mergedResult.put("totalAmount", first.get("totalAmount"));
+                    mergedResult.put("taxAmount", first.get("taxAmount"));
+                    mergedResult.put("taxRate", first.get("taxRate"));
+                    mergedResult.put("projectName", first.get("projectName"));
+                    mergedResult.put("partNo", first.get("partNo"));
+                }
+                return mergedResult;
             } else {
-                // 图片用增值税发票识别
-                if (apiKey == null || apiKey.isEmpty() || secretKey == null || secretKey.isEmpty()) {
-                    Map<String, Object> result = createEmptyResult("增值税发票 OCR 未配置 API Key");
-                    result.put("success", false);
-                    return result;
-                }
+                // 图片直接用增值税发票识别
                 return callVatInvoiceOcr(fileBytes, fileName);
             }
         } catch (Exception e) {
@@ -125,20 +154,69 @@ public class OcrInvoiceService {
 
     private Map<String, Object> callGeneralOcr(byte[] fileBytes, String fileName) throws Exception {
         String token = getAccessToken(true);
-        String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
 
-        String fileBase64 = Base64.getEncoder().encodeToString(fileBytes);
-
-        // PDF 用 pdf_file 参数，图片用 image 参数
-        String formData;
+        // PDF: 先转成图片列表，再逐页 OCR 识别
         if (fileName.toLowerCase().endsWith(".pdf")) {
-            formData = "pdf_file=" + java.net.URLEncoder.encode(fileBase64, StandardCharsets.UTF_8);
-        } else {
-            formData = "image=" + java.net.URLEncoder.encode(fileBase64, StandardCharsets.UTF_8);
-        }
+            List<byte[]> imagePages = pdfToImages(fileBytes);
+            List<Map<String, Object>> allInvoiceResults = new ArrayList<>();
+            Map<String, Object> mergedResult = new HashMap<>();
 
-        String response = doPost(requestUrl, formData);
-        return parseMultipleInvoiceResponse(response);
+            for (int i = 0; i < imagePages.size(); i++) {
+                byte[] pageImage = imagePages.get(i);
+                String pageBase64 = Base64.getEncoder().encodeToString(pageImage);
+                String formData = "image=" + java.net.URLEncoder.encode(pageBase64, StandardCharsets.UTF_8);
+                String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
+
+                String response = doPost(requestUrl, formData);
+                Map<String, Object> pageResult = parseMultipleInvoiceResponse(response);
+
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> pageInvoices = (List<Map<String, Object>>) pageResult.get("invoiceResults");
+                if (pageInvoices != null) {
+                    allInvoiceResults.addAll(pageInvoices);
+                }
+            }
+
+            mergedResult.put("invoiceResults", allInvoiceResults);
+            mergedResult.put("count", allInvoiceResults.size());
+            mergedResult.put("success", !allInvoiceResults.isEmpty());
+            mergedResult.put("message", "PDF 识别到 " + allInvoiceResults.size() + " 条发票");
+            if (!allInvoiceResults.isEmpty()) {
+                Map<String, Object> first = allInvoiceResults.get(0);
+                mergedResult.put("invoiceNo", first.get("invoiceNo"));
+                mergedResult.put("invoiceDate", first.get("invoiceDate"));
+                mergedResult.put("totalAmount", first.get("totalAmount"));
+                mergedResult.put("taxAmount", first.get("taxAmount"));
+                mergedResult.put("taxRate", first.get("taxRate"));
+                mergedResult.put("projectName", first.get("projectName"));
+                mergedResult.put("partNo", first.get("partNo"));
+            }
+            return mergedResult;
+        } else {
+            // 图片直接用通用识别
+            String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
+            String fileBase64 = Base64.getEncoder().encodeToString(fileBytes);
+            String formData = "image=" + java.net.URLEncoder.encode(fileBase64, StandardCharsets.UTF_8);
+            String response = doPost(requestUrl, formData);
+            return parseMultipleInvoiceResponse(response);
+        }
+    }
+
+    /**
+     * PDF 转换为图片列表（每页一张 PNG）
+     */
+    private List<byte[]> pdfToImages(byte[] pdfBytes) throws IOException {
+        List<byte[]> imagePages = new ArrayList<>();
+        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(pdfBytes))) {
+            PDFRenderer renderer = new PDFRenderer(document);
+            for (int i = 0; i < document.getNumberOfPages(); i++) {
+                BufferedImage image = renderer.renderImageWithDPI(i, 300);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(image, "PNG", baos);
+                imagePages.add(baos.toByteArray());
+            }
+        }
+        return imagePages;
     }
 
     private Map<String, Object> parseVatInvoiceResponse(String jsonResponse) {
