@@ -34,6 +34,15 @@ public interface InvoiceMapper {
     );
 
     /**
+     * 根据验收单号列表查询待开票明细 - 一般采购（简化版）
+     */
+    List<PendingInvoiceItem> listPendingInvoiceGeneralByAcceptApplyNosSimple(
+            @Param("supplierNo") String supplierNo,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("acceptApplyNos") List<String> acceptApplyNos
+    );
+
+    /**
      * 统计待开票清单 - 一般采购（按验收单号去重）
      */
     long countPendingInvoiceGeneral(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);

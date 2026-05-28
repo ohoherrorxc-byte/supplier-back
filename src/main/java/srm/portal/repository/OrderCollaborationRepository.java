@@ -69,7 +69,7 @@ public class OrderCollaborationRepository {
      * 列出供应商的订单
      */
     public List<Map<String, Object>> listNewOrdersBySupplier(Long supplierId, int limit, int offset) {
-        return orderMapper.listOrderHeaders(supplierId, null, null, null, null, null, null, limit, offset, null, null);
+        return orderMapper.listOrderHeaders(supplierId, null, null, null, null, null, null, null, limit, offset, null, null);
     }
 
     /**

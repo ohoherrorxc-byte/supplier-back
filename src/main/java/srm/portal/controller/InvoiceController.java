@@ -51,8 +51,8 @@ public class InvoiceController {
                 supplierNo, acceptApplyNo, partsNo, partsName, isAdmin, pageSize, offset);
 
             // 根据验收单号列表查询所有明细
-            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNos(
-                supplierNo, acceptApplyNo, partsNo, partsName, isAdmin, applyNos);
+            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNosSimple(
+                supplierNo, isAdmin, applyNos);
 
             // 总数使用专门的数量统计查询
             long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo, isAdmin);
