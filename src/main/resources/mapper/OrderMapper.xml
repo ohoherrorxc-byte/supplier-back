@@ -644,7 +644,10 @@
                 WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
                 WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
                 ELSE 21
-            END AS supplier_order_status
+            END AS supplier_order_status,
+            COALESCE(SUM(d.need_number), 0) AS forecast_total_qty,
+            COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0) AS forecast_pending_qty,
+            COALESCE(SUM(CASE WHEN d.supplier_order_status = 20 THEN d.need_number ELSE 0 END), 0) AS forecast_confirmed_qty
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
         LEFT JOIN tb_contract_supplier s ON o.supplier_id = s.ID
@@ -678,7 +681,7 @@
             AND 'pending' = #{feedbackStatus}
         </if>
         GROUP BY o.order_no, o.create_time, s.SUPPLIER_NAME
-        ORDER BY o.order_no
+        ORDER BY o.create_time DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -1319,6 +1322,7 @@
             pm.EXTERNAL_PART_NO AS partsNumber,
             pm.CHINESE_NAME AS partsName,
             o.storage_name AS demandFactory,
+            o.require_attr AS requireAttr,
             DATE_FORMAT(d.need_date, '%Y-%m-%d') AS purchaseDate,
             d.need_number AS demandQty
         FROM tb_purchase_parts_order_detail d

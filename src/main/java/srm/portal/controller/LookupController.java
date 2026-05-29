@@ -3,6 +3,7 @@ package srm.portal.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import srm.portal.mapper.SupplierMapper;
 import srm.portal.repository.GenericTableLookupRepository;
 
 import java.util.HashMap;
@@ -15,10 +16,12 @@ import java.util.Optional;
 public class LookupController {
     private final GenericTableLookupRepository repo;
     private final JdbcTemplate jdbcTemplate;
+    private final SupplierMapper supplierMapper;
 
-    public LookupController(GenericTableLookupRepository repo, JdbcTemplate jdbcTemplate) {
+    public LookupController(GenericTableLookupRepository repo, JdbcTemplate jdbcTemplate, SupplierMapper supplierMapper) {
         this.repo = repo;
         this.jdbcTemplate = jdbcTemplate;
+        this.supplierMapper = supplierMapper;
     }
 
     @GetMapping("/suppliers/{supplierId}")
@@ -83,6 +86,16 @@ public class LookupController {
         res.put("userDetail", detail);
         res.put("supplier", supplier);
         return ResponseEntity.ok(res);
+    }
+
+    @GetMapping("/users/suppliers")
+    public ResponseEntity<Map<String, Object>> listSuppliers(
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int offset
+    ) {
+        int l = repo.normalizeLimit(limit);
+        int o = repo.normalizeOffset(offset);
+        return ResponseEntity.ok(Map.of("items", supplierMapper.listAllSuppliers(l, o)));
     }
 
     @GetMapping("/users/{userId}/permissions")

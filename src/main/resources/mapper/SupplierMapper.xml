@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="srm.portal.mapper.SupplierMapper">
+
+    <select id="listAllSuppliers" resultType="map">
+        SELECT * FROM tb_contract_supplier ORDER BY ID DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 查询供应商归属：tb_user_detail.USER_ID -> tb_user_detail.SUPPLIER_COMPANY_ID -> tb_contract_supplier.ID -->
+    <select id="findSupplierPkByUserId" resultType="map">
+        SELECT ${supplierIdColumn} AS supplier_pk FROM tb_user_detail WHERE ${userIdColumn} = #{userId}
+    </select>
+
+    <!-- 查询用户绑定的供应商公司ID -->
+    <select id="findSupplierCompanyIdByUserId" resultType="long">
+        SELECT ${supplierIdColumn} FROM tb_user_detail
+        WHERE ${userIdColumn} = #{userId} AND IS_DELETED = 0
+    </select>
+
+    <!-- 查询用户是否为管理员 -->
+    <select id="findIsSupplierAdmin" resultType="string">
+        SELECT IS_SUPPLIER_ADMIN FROM tb_user_detail WHERE USER_ID = #{userId} AND IFNULL(IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 查询用户账号 -->
+    <select id="findAccountByUserId" resultType="string">
+        SELECT account FROM blade_user WHERE ${pkColumn} = #{userId} AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询用户角色名 -->
+    <select id="findRoleNamesByUserId" resultType="string">
+        SELECT r.role_name FROM blade_user_role ur
+        INNER JOIN blade_role r ON ur.role_id = r.id
+        WHERE ur.user_id = #{userId} AND IFNULL(ur.is_deleted, 0) = 0 AND IFNULL(r.is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询用户是否为供应商客户 -->
+    <select id="findSupplierClient" resultType="string">
+        SELECT SUPPLIER_CLIENT FROM tb_user_detail WHERE USER_ID = #{userId} AND IFNULL(IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 统计待确认订单 -->
+    <select id="countPendingOrders" resultType="long">
+        SELECT COUNT(*) FROM tb_purchase_parts_order
+        WHERE supplier_id = #{supplierId} AND supplier_order_status = 0 AND is_deleted = 0 AND require_attr = '订单'
+    </select>
+
+    <!-- 统计所有待确认订单（管理员） -->
+    <select id="countPendingOrdersAll" resultType="long">
+        SELECT COUNT(*) FROM tb_purchase_parts_order
+        WHERE supplier_order_status = 0 AND order_status = 1 AND is_deleted = 0 AND require_attr = '订单'
+    </select>
+
+    <!-- 统计在途ASN -->
+    <select id="countActiveAsn" resultType="long">
+        SELECT COUNT(*) FROM tb_srm_asn
+        WHERE supplier_id = #{supplierId} AND status IN ('CREATED', 'SHIPPED') AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 统计所有在途ASN（管理员） -->
+    <select id="countActiveAsnAll" resultType="long">
+        SELECT COUNT(*) FROM tb_srm_asn
+        WHERE status IN ('CREATED', 'SHIPPED') AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 统计今日到货 -->
+    <select id="countTodayArriving" resultType="long">
+        SELECT COALESCE(SUM(ship_qty), 0) FROM tb_srm_asn
+        WHERE supplier_id = #{supplierId} AND actual_eta_date = CURDATE() AND status = 'SHIPPED' AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 统计所有今日到货（管理员） -->
+    <select id="countTodayArrivingAll" resultType="long">
+        SELECT COALESCE(SUM(ship_qty), 0) FROM tb_srm_asn
+        WHERE actual_eta_date = CURDATE() AND status = 'SHIPPED' AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询用户认证信息 -->
+    <select id="findBladeUserByAccount" resultType="map">
+        SELECT * FROM blade_user WHERE ${accountColumn} = #{account} AND tenant_id = #{tenantId} AND IFNULL(is_deleted, 0) = 0
+    </select>
+
+    <!-- 查询用户详情 -->
+    <select id="findUserDetailsByUserId" resultType="map">
+        SELECT * FROM tb_user_detail WHERE ${userIdColumn} = #{userId} AND IFNULL(IS_DELETED, 0) = 0
+    </select>
+
+    <!-- 修改密码 -->
+    <update id="updatePassword">
+        UPDATE blade_user SET ${passwordColumn} = #{encryptedPassword} WHERE ${pkColumn} = #{userId} AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 查询供应商下的订单列表 -->
+    <select id="listOrdersBySupplier" resultType="map">
+        SELECT * FROM ${orderTable} WHERE ${supplierColumn} = #{supplierId}
+        ORDER BY ${pkColumn} DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 通过销售订单号查询订单号 -->
+    <select id="findOrderNoById" resultType="string">
+        SELECT ${orderNoColumn} FROM ${orderTable} WHERE ${pkColumn} = #{orderId}
+    </select>
+
+    <!-- 查询发票列表（直连） -->
+    <select id="listInvoicesByOrderDirect" resultType="map">
+        SELECT * FROM ${invoiceTable} WHERE ${orderIdColumn} = #{orderId}
+        ORDER BY ${pkColumn} DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 查询发票列表（通过销售订单号） -->
+    <select id="listInvoicesBySalesOrderNo" resultType="map">
+        SELECT * FROM ${invoiceTable} WHERE ${salesOrderNoColumn} = #{salesOrderNo}
+        ORDER BY ${pkColumn} DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+</mapper>

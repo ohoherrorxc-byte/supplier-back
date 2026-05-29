@@ -405,6 +405,7 @@ public class OrderCollaborationRepository {
                 newRow.put("demandFactory", safeDemandFactory);
                 newRow.put("hasOrder", false);
                 newRow.put("hasForecast", false);
+                newRow.put("dataType", "混合");
                 newRow.put("total", 0);
                 return newRow;
             });
@@ -416,11 +417,24 @@ public class OrderCollaborationRepository {
                 totalQty = ((Number) totalQtyObj).intValue();
             }
 
-            // 标记数据类型
-            if ("预测".equals(dataType)) {
+            // 标记数据类型（优先使用订单，若同时存在预测则为混合）
+            if ("订单".equals(dataType)) {
+                pivotRow.put("hasOrder", true);
+                if (Boolean.TRUE.equals(pivotRow.get("hasForecast"))) {
+                    pivotRow.put("dataType", "混合");
+                } else {
+                    pivotRow.put("dataType", "订单");
+                }
+            } else if ("预测".equals(dataType)) {
                 pivotRow.put("hasForecast", true);
+                if (Boolean.TRUE.equals(pivotRow.get("hasOrder"))) {
+                    pivotRow.put("dataType", "混合");
+                } else {
+                    pivotRow.put("dataType", "预测");
+                }
             } else {
                 pivotRow.put("hasOrder", true);
+                pivotRow.put("dataType", dataType);
             }
 
             // 设置时间列的值（如果同时间段已有订单数据，预测数据不覆盖）
@@ -440,21 +454,54 @@ public class OrderCollaborationRepository {
                 }
             }
 
-            // 累加总数（不区分订单和预测）
-            Object totalObj = pivotRow.get("total");
-            int currentTotal = (totalObj != null) ? ((Number) totalObj).intValue() : 0;
-            pivotRow.put("total", currentTotal + totalQty);
+            // 累加总数（区分订单和预测）
+            Object orderTotalObj = pivotRow.get("total_order");
+            Object forecastTotalObj = pivotRow.get("total_forecast");
+            int currentOrderTotal = (orderTotalObj != null) ? ((Number) orderTotalObj).intValue() : 0;
+            int currentForecastTotal = (forecastTotalObj != null) ? ((Number) forecastTotalObj).intValue() : 0;
+            if ("订单".equals(dataType)) {
+                pivotRow.put("total_order", currentOrderTotal + totalQty);
+            } else if ("预测".equals(dataType)) {
+                pivotRow.put("total_forecast", currentForecastTotal + totalQty);
+            }
         }
 
-        // 确保所有时间标签列都存在，并合并订单和预测数据
+        // 汇总总数：展示订单总数、预测总数、总计
+        // 预测合计需要排除那些同时间段有订单的月份（该月预测作废）
+        for (Map<String, Object> row : pivotMap.values()) {
+            int orderTotal = (row.get("total_order") != null) ? ((Number) row.get("total_order")).intValue() : 0;
+            row.remove("total_order");
+            row.remove("total_forecast");
+            row.remove("month_with_order");
+            // 预测合计时，排除那些同时有订单的月份（该月预测作废）
+            int validForecastTotal = 0;
+            for (String timeLabel : timeLabels) {
+                Object orderVal = row.get(timeLabel + "_order");
+                Object forecastVal = row.get(timeLabel + "_forecast");
+                if (forecastVal != null && orderVal == null) {
+                    validForecastTotal += ((Number) forecastVal).intValue();
+                }
+            }
+            row.put("totalOrder", orderTotal);
+            row.put("totalForecast", validForecastTotal);
+            row.put("total", orderTotal + validForecastTotal);
+        }
+
+        // 确保所有时间标签列都存在，订单优先于预测（同一时间段有订单则不用预测数据）
         for (Map<String, Object> row : pivotMap.values()) {
             for (String timeLabel : timeLabels) {
                 Object orderVal = row.remove(timeLabel + "_order");
                 Object forecastVal = row.remove(timeLabel + "_forecast");
-                int combined = 0;
-                if (orderVal != null) combined += ((Number) orderVal).intValue();
-                if (forecastVal != null) combined += ((Number) forecastVal).intValue();
-                row.put(timeLabel, combined);
+                int value = 0;
+                boolean isForecastOnly = false;
+                if (orderVal != null) {
+                    value = ((Number) orderVal).intValue();
+                } else if (forecastVal != null) {
+                    value = ((Number) forecastVal).intValue();
+                    isForecastOnly = true;
+                }
+                row.put(timeLabel, value);
+                row.put(timeLabel + "_isForecast", isForecastOnly);
             }
         }
 
@@ -475,12 +522,16 @@ public class OrderCollaborationRepository {
             Boolean hasForecast = (Boolean) row.get("hasForecast");
 
             List<Integer> data = new java.util.ArrayList<>();
+            List<Boolean> isForecastList = new java.util.ArrayList<>();
             for (String timeLabel : timeLabels) {
                 Object value = row.get(timeLabel);
+                Object isForecast = row.get(timeLabel + "_isForecast");
                 data.add(value != null ? ((Number) value).intValue() : 0);
+                isForecastList.add(Boolean.TRUE.equals(isForecast));
             }
 
-            series.add(Map.of("name", name, "data", data, "hasOrder", hasOrder, "hasForecast", hasForecast));
+            series.add(Map.of("name", name, "data", data, "isForecastList", isForecastList,
+                "hasOrder", hasOrder != null && hasOrder, "hasForecast", hasForecast != null && hasForecast));
         }
 
         return Map.of("xAxis", xAxis, "series", series);
