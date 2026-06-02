@@ -276,9 +276,11 @@ public class ForecastController {
     public ResponseEntity<Map<String, Object>> analyzeSupplierHistory(
             @RequestBody SupplierHistoryAnalyzeRequest request) {
         try {
-            // 获取当前用户的供应商 ID
+            // 获取供应商ID：如果请求中带了供应商名称，则通过名称查找；否则用当前登录用户的供应商ID
             Long supplierId = null;
-            if (request.getUserId() != null) {
+            if (request.getSupplierName() != null && !request.getSupplierName().isBlank()) {
+                supplierId = lookupRepo.findSupplierIdByName(request.getSupplierName()).orElse(null);
+            } else if (request.getUserId() != null) {
                 supplierId = lookupRepo.findSupplierCompanyIdByUserId(String.valueOf(request.getUserId())).orElse(null);
             }
 
@@ -519,6 +521,7 @@ public class ForecastController {
         private String endDate;
         private java.util.List<String> demandFactories;
         private java.util.List<String> partsNumbers;
+        private String supplierName;
 
         // Getters and Setters
         public String getUserId() {
@@ -567,6 +570,14 @@ public class ForecastController {
 
         public void setPartsNumbers(java.util.List<String> partsNumbers) {
             this.partsNumbers = partsNumbers;
+        }
+
+        public String getSupplierName() {
+            return supplierName;
+        }
+
+        public void setSupplierName(String supplierName) {
+            this.supplierName = supplierName;
         }
     }
 

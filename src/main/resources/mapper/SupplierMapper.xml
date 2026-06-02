@@ -7,6 +7,24 @@
         SELECT * FROM tb_contract_supplier ORDER BY ID DESC LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 模糊搜索供应商列表 -->
+    <select id="searchSuppliersByName" resultType="map">
+        SELECT * FROM tb_contract_supplier
+        WHERE supplier_name LIKE CONCAT('%', #{keyword}, '%')
+           OR short_name LIKE CONCAT('%', #{keyword}, '%')
+           OR supplier_no LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY ID DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 通过供应商名称精确查找供应商ID -->
+    <select id="findSupplierIdByName" resultType="long">
+        SELECT ID FROM tb_contract_supplier
+        WHERE supplier_name = #{supplierName}
+           OR short_name = #{supplierName}
+           OR supplier_no = #{supplierName}
+        LIMIT 1
+    </select>
+
     <!-- 查询供应商归属：tb_user_detail.USER_ID -> tb_user_detail.SUPPLIER_COMPANY_ID -> tb_contract_supplier.ID -->
     <select id="findSupplierPkByUserId" resultType="map">
         SELECT ${supplierIdColumn} AS supplier_pk FROM tb_user_detail WHERE ${userIdColumn} = #{userId}

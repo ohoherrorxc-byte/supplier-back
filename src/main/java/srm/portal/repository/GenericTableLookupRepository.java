@@ -58,6 +58,11 @@ public class GenericTableLookupRepository {
         return findByPk("tb_invoice", invoiceId, pkColumn);
     }
 
+    public Optional<Long> findSupplierIdByName(String supplierName) {
+        Long id = supplierMapper.findSupplierIdByName(supplierName);
+        return Optional.ofNullable(id);
+    }
+
     public Optional<Map<String, Object>> findSupplierByUserId(String userId) {
         String userDetailFilterColumn = props.getUserDetailFilterColumn();
         if (userDetailFilterColumn == null || userDetailFilterColumn.isBlank()) {

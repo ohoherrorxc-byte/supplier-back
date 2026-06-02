@@ -91,10 +91,14 @@ public class LookupController {
     @GetMapping("/users/suppliers")
     public ResponseEntity<Map<String, Object>> listSuppliers(
             @RequestParam(defaultValue = "100") int limit,
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(required = false) String keyword
     ) {
         int l = repo.normalizeLimit(limit);
         int o = repo.normalizeOffset(offset);
+        if (keyword != null && !keyword.isBlank()) {
+            return ResponseEntity.ok(Map.of("items", supplierMapper.searchSuppliersByName(keyword.trim(), l, o)));
+        }
         return ResponseEntity.ok(Map.of("items", supplierMapper.listAllSuppliers(l, o)));
     }
 

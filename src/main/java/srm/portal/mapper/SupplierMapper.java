@@ -20,6 +20,10 @@ public interface SupplierMapper {
 
     List<Map<String, Object>> listAllSuppliers(@Param("limit") int limit, @Param("offset") int offset);
 
+    List<Map<String, Object>> searchSuppliersByName(@Param("keyword") String keyword, @Param("limit") int limit, @Param("offset") int offset);
+
+    Long findSupplierIdByName(@Param("supplierName") String supplierName);
+
     Map<String, Object> findSupplierPkByUserId(@Param("userId") String userId,
             @Param("userIdColumn") String userIdColumn,
             @Param("supplierIdColumn") String supplierIdColumn);
