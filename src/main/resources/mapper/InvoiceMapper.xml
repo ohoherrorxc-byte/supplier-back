@@ -231,7 +231,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND COALESCE(po.CREATE_TIME) >= '2026-05-28 00:00:00'
+          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
@@ -295,7 +295,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND COALESCE(po.CREATE_TIME) >= '2026-05-28 00:00:00'
+          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
@@ -393,7 +393,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND COALESCE(po.CREATE_TIME) >= '2026-05-28 00:00:00'
+          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
@@ -466,7 +466,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND COALESCE(po.CREATE_TIME) >= '2026-05-28 00:00:00'
+          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
