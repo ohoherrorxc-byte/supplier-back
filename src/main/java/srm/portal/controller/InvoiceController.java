@@ -93,7 +93,7 @@ public class InvoiceController {
                 supplierNo, acceptApplyNo, orderNo, partsNo, partsName, isAdmin, applyNos);
 
             // 总数使用专门的数量统计查询
-            long total = invoiceMapper.countPendingInvoiceBom(supplierNo, isAdmin);
+            long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, isAdmin);
             PendingInvoiceResponse resp = new PendingInvoiceResponse();
             resp.setItems(items);
             resp.setTotal(total);

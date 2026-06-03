@@ -404,6 +404,29 @@
           </if>
     </select>
 
+    <!-- 统计待开票清单明细行数 - BOM采购 -->
+    <select id="countPendingInvoiceBomDetails" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
+          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
     <!-- 获取待确认订单号列表 -->
     <select id="listPendingOrderApplyNos" resultType="string">
         SELECT DISTINCT pc.APPLY_NO

@@ -108,9 +108,14 @@ public interface InvoiceMapper {
     );
 
     /**
-     * 统计待开票清单 - BOM采购
+     * 统计待开票清单 - BOM采购（按验收单号去重）
      */
     long countPendingInvoiceBom(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
+
+    /**
+     * 统计待开票清单明细行数 - BOM采购
+     */
+    long countPendingInvoiceBomDetails(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
 
     /**
      * 创建结算单
