@@ -432,6 +432,18 @@ public interface OrderMapper {
     );
 
     /**
+     * 供应商历史需求分析 - 导出用（包含所有状态）
+     */
+    List<Map<String, Object>> analyzeSupplierHistoryForExport(
+            @Param("supplierId") Long supplierId,
+            @Param("granularity") String granularity,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("demandFactories") List<String> demandFactories,
+            @Param("partsNumbers") List<String> partsNumbers
+    );
+
+    /**
      * 供应商历史下钻明细查询
      */
     List<Map<String, Object>> getSupplierHistoryDrillDown(

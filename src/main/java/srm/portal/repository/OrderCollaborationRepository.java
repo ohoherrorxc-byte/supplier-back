@@ -323,6 +323,39 @@ public class OrderCollaborationRepository {
     }
 
     /**
+     * 供应商历史需求分析 - 导出用（包含所有状态）
+     */
+    public Map<String, Object> analyzeSupplierHistoryForExport(
+            Long supplierId,
+            String granularity,
+            String startDate,
+            String endDate,
+            List<String> demandFactories,
+            List<String> partsNumbers
+    ) {
+        if (demandFactories == null) {
+            demandFactories = new java.util.ArrayList<>();
+        }
+        if (partsNumbers == null) {
+            partsNumbers = new java.util.ArrayList<>();
+        }
+
+        List<Map<String, Object>> aggregatedData = orderMapper.analyzeSupplierHistoryForExport(
+                supplierId, granularity, startDate, endDate, demandFactories, partsNumbers
+        );
+
+        List<String> timeLabels = generateTimeLabels(granularity, startDate, endDate);
+        List<Map<String, Object>> pivotData = convertToPivotData(aggregatedData, timeLabels);
+        Map<String, Object> chartData = generateSupplierHistoryChartData(pivotData, timeLabels);
+
+        return Map.of(
+                "aggregatedData", pivotData,
+                "timeLabels", timeLabels,
+                "chartData", chartData
+        );
+    }
+
+    /**
      * 根据起止日期生成完整的时间标签序列
      */
     private List<String> generateTimeLabels(String granularity, String startDate, String endDate) {

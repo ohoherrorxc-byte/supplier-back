@@ -357,8 +357,8 @@ public class ForecastController {
                 supplierId = lookupRepo.findSupplierCompanyIdByUserId(String.valueOf(request.getUserId())).orElse(null);
             }
 
-            // 获取分析数据
-            Map<String, Object> result = orderRepo.analyzeSupplierHistory(
+            // 获取分析数据（导出用，包含所有状态）
+            Map<String, Object> result = orderRepo.analyzeSupplierHistoryForExport(
                     supplierId,
                     request.getGranularity(),
                     request.getStartDate(),
@@ -483,13 +483,22 @@ public class ForecastController {
                 // 时间列数据
                 for (String label : timeLabels) {
                     Cell dataCell = dataRow.createCell(colIndex++);
-                    Object value = row.get(label);
-                    if (value != null) {
-                        dataCell.setCellValue(((Number) value).doubleValue());
+                    Object orderValue = row.get(label + "_order");
+                    Object forecastValue = row.get(label + "_forecast");
+                    Object singleValue = row.get(label);
+
+                    if (orderValue != null && forecastValue != null) {
+                        dataCell.setCellValue(((Number) orderValue).doubleValue() + ((Number) forecastValue).doubleValue());
+                    } else if (forecastValue != null && orderValue == null) {
+                        dataCell.setCellValue(((Number) forecastValue).doubleValue() + " (预测)");
+                    } else if (orderValue != null) {
+                        dataCell.setCellValue(((Number) orderValue).doubleValue());
+                    } else if (singleValue != null) {
+                        dataCell.setCellValue(((Number) singleValue).doubleValue());
                     } else {
                         dataCell.setCellValue(0);
                     }
-                    dataCell.setCellStyle(numberStyle);
+                    dataCell.setCellStyle(dataStyle);
                 }
 
                 // 合计

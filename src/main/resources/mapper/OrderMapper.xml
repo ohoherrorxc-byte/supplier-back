@@ -654,6 +654,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
+          AND o.cover_predict_status != 2
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -693,6 +694,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
+          AND o.cover_predict_status != 2
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -739,6 +741,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
+          AND o.cover_predict_status != 2
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -777,6 +780,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
+          AND o.cover_predict_status != 2
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -1278,6 +1282,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.supplier_order_status = 20
+          AND (o.cover_predict_status IS NULL OR o.cover_predict_status != 2)
         <if test="supplierId != null">
             AND o.supplier_id = #{supplierId}
         </if>
@@ -1300,6 +1305,72 @@
             </foreach>
         </if>
         GROUP BY COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number), COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name), o.storage_name, o.require_attr,
+        <choose>
+            <when test="granularity == 'month'">
+                DATE_FORMAT(d.need_date, '%Y-%m')
+            </when>
+            <when test="granularity == 'year'">
+                DATE_FORMAT(d.need_date, '%Y')
+            </when>
+            <otherwise>
+                DATE_FORMAT(d.need_date, '%Y-%m')
+            </otherwise>
+        </choose>
+        ORDER BY pm.EXTERNAL_PART_NO, time_key
+    </select>
+
+    <!-- 供应商历史需求分析 - 导出用（包含所有状态，包括 cover_predict_status=2） -->
+    <select id="analyzeSupplierHistoryForExport" resultType="map">
+        SELECT
+            COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), pm.PARTS_NO) AS parts_number,
+            COALESCE(NULLIF(pm.CHINESE_NAME, ''), pm.PARTS_NAME) AS parts_name,
+            o.storage_name AS demand_factory,
+            <choose>
+                <when test="granularity == 'month'">
+                    DATE_FORMAT(d.need_date, '%Y-%m')
+                </when>
+                <when test="granularity == 'year'">
+                    DATE_FORMAT(d.need_date, '%Y')
+                </when>
+                <otherwise>
+                    DATE_FORMAT(d.need_date, '%Y-%m')
+                </otherwise>
+            </choose>
+            AS time_key,
+            o.require_attr AS data_type,
+            o.cover_predict_status AS cover_predict_status,
+            COUNT(DISTINCT o.id) AS order_count,
+            SUM(d.need_number) AS total_qty
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        LEFT JOIN tb_parts_maint pm ON d.parts_number = pm.PARTS_NO AND pm.IS_DELETED = 0
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.supplier_order_status = 20
+          AND (o.cover_predict_status IS NULL OR o.cover_predict_status != 2)
+        <if test="supplierId != null">
+            AND o.supplier_id = #{supplierId}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND d.need_date >= CONCAT(#{startDate}, '-01')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND d.need_date &lt;= LAST_DAY(CONCAT(#{endDate}, '-01'))
+        </if>
+        <if test="demandFactories != null and demandFactories.size() > 0">
+            AND o.storage_name IN
+            <foreach collection="demandFactories" item="factory" open="(" separator="," close=")">
+                #{factory}
+            </foreach>
+        </if>
+        <if test="partsNumbers != null and partsNumbers.size() > 0">
+            AND d.parts_number IN
+            <foreach collection="partsNumbers" item="pn" open="(" separator="," close=")">
+                #{pn}
+            </foreach>
+        </if>
+        GROUP BY COALESCE(NULLIF(pm.EXTERNAL_PART_NO, ''), d.parts_number), COALESCE(NULLIF(pm.CHINESE_NAME, ''), d.parts_name), o.storage_name, o.require_attr,
+            o.cover_predict_status,
         <choose>
             <when test="granularity == 'month'">
                 DATE_FORMAT(d.need_date, '%Y-%m')
