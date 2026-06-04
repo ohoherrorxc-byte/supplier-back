@@ -34,28 +34,36 @@ public class InvoiceController {
      */
     @GetMapping("/pending/general")
     public ResponseEntity<PendingInvoiceResponse> listPendingInvoiceGeneral(
-            @RequestParam Long userId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String supplierNo,
+            @RequestParam(required = false) Boolean isAdmin,
             @RequestParam(required = false) String acceptApplyNo,
             @RequestParam(required = false) String partsNo,
             @RequestParam(required = false) String partsName,
-            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "1") int pageNum
     ) {
         try {
-            String supplierNo = getSupplierNoByUserId(userId);
-            boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            // 如果前端没传，则后端查询
+            if (supplierNo == null && userId != null) {
+                supplierNo = getSupplierNoByUserId(userId);
+            }
+            boolean adminFlag = Boolean.TRUE.equals(isAdmin);
+            if (isAdmin == null && userId != null) {
+                adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            }
             int offset = (pageNum - 1) * pageSize;
 
             // 先按验收单号分页查询（不查明细）
             List<String> applyNos = invoiceMapper.listPendingInvoiceGeneralByPage(
-                supplierNo, acceptApplyNo, partsNo, partsName, isAdmin, pageSize, offset);
+                supplierNo, acceptApplyNo, partsNo, partsName, adminFlag, pageSize, offset);
 
             // 根据验收单号列表查询所有明细
             List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNosSimple(
-                supplierNo, isAdmin, applyNos);
+                supplierNo, adminFlag, applyNos);
 
             // 总数使用专门的数量统计查询
-            long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo, isAdmin);
+            long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo, adminFlag);
             PendingInvoiceResponse resp = new PendingInvoiceResponse();
             resp.setItems(items);
             resp.setTotal(total);
@@ -71,29 +79,37 @@ public class InvoiceController {
      */
     @GetMapping("/pending/bom")
     public ResponseEntity<PendingInvoiceResponse> listPendingInvoiceBom(
-            @RequestParam Long userId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String supplierNo,
+            @RequestParam(required = false) Boolean isAdmin,
             @RequestParam(required = false) String acceptApplyNo,
             @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String partsNo,
             @RequestParam(required = false) String partsName,
-            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "1") int pageNum
     ) {
         try {
-            String supplierNo = getSupplierNoByUserId(userId);
-            boolean isAdmin = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            // 如果前端没传，则后端查询
+            if (supplierNo == null && userId != null) {
+                supplierNo = getSupplierNoByUserId(userId);
+            }
+            boolean adminFlag = Boolean.TRUE.equals(isAdmin);
+            if (isAdmin == null && userId != null) {
+                adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            }
             int offset = (pageNum - 1) * pageSize;
 
             // 先按验收单号分页查询（不查明细）
             List<String> applyNos = invoiceMapper.listPendingInvoiceBomByPage(
-                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, isAdmin, pageSize, offset);
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, pageSize, offset);
 
             // 根据验收单号列表查询所有明细
             List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByAcceptApplyNos(
-                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, isAdmin, applyNos);
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, applyNos);
 
             // 总数使用专门的数量统计查询
-            long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, isAdmin);
+            long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, adminFlag);
             PendingInvoiceResponse resp = new PendingInvoiceResponse();
             resp.setItems(items);
             resp.setTotal(total);
@@ -343,7 +359,7 @@ public class InvoiceController {
             @RequestParam(required = false) String acceptApplyNo,
             @RequestParam(required = false) String bomOrderNo,
             @RequestParam(required = false) String contractNo,
-            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "1") int pageNum
     ) {
         String supplierNo = getSupplierNoByUserId(userId);

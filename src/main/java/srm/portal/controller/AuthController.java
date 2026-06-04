@@ -71,6 +71,16 @@ public class AuthController {
         // 判断是否供应商客户
         boolean isSupplierClient = isSupplierClient(userId);
 
+        // 获取供应商编号
+        String supplierNo = null;
+        Map<String, Object> supplier = genericMapper.findSupplierByUserId(userId);
+        if (supplier != null) {
+            Object supplierNoObj = getValueIgnoreCase(supplier, "supplier_no");
+            if (supplierNoObj != null) {
+                supplierNo = String.valueOf(supplierNoObj);
+            }
+        }
+
         // 生成 token 并保存到缓存
         String token = tokenService.generateToken(userId, userName, isAdmin, isSupplierClient);
 
@@ -79,7 +89,8 @@ public class AuthController {
                 "userId", String.valueOf(userId),
                 "userName", userName,
                 "isAdmin", isAdmin,
-                "isSupplierClient", isSupplierClient
+                "isSupplierClient", isSupplierClient,
+                "supplierNo", supplierNo != null ? supplierNo : ""
         ));
     }
 
