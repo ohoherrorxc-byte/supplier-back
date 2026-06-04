@@ -227,7 +227,7 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("feedbackStatus") String feedbackStatus,
+            @Param("supplierOrderStatus") String supplierOrderStatus,
             @Param("limit") int limit,
             @Param("offset") int offset
     );
@@ -245,6 +245,18 @@ public interface OrderMapper {
     );
 
     /**
+     * 导出采购计划列表（无分页）
+     */
+    List<Map<String, Object>> listPurchasePlanForExport(
+            @Param("supplierId") Long supplierId,
+            @Param("orderNo") List<String> orderNo,
+            @Param("partsNumber") List<String> partsNumber,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("feedbackStatus") String feedbackStatus
+    );
+
+    /**
      * 查询采购计划明细列表
      */
     List<Map<String, Object>> listPurchasePlanDetails(
@@ -253,7 +265,7 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("feedbackStatus") String feedbackStatus,
+            @Param("supplierOrderStatus") String supplierOrderStatus,
             @Param("limit") int limit,
             @Param("offset") int offset
     );

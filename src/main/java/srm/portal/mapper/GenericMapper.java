@@ -238,4 +238,21 @@ public interface GenericMapper {
             WHERE supplier_id = #{supplierId} AND actual_eta_date = CURDATE() AND status = 'SHIPPED' AND IFNULL(is_deleted, 0) = 0
             """)
     Long countTodayArriving(@Param("supplierId") Long supplierId);
+
+    /**
+     * 统计待确认预测数量
+     */
+    @Select("""
+            SELECT COUNT(DISTINCT o.order_no)
+            FROM tb_purchase_parts_order_detail d
+            INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+            WHERE o.supplier_id = #{supplierId}
+              AND IFNULL(d.is_deleted, 0) = 0
+              AND IFNULL(o.is_deleted, 0) = 0
+              AND o.require_attr = '预测'
+              AND o.cover_predict_status = 2
+              AND d.supplier_order_status = 0
+              AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+            """)
+    Long countPendingForecast(@Param("supplierId") Long supplierId);
 }

@@ -175,11 +175,13 @@ public class GenericTableLookupRepository {
         Long pendingOrders = supplierMapper.countPendingOrders(supplierId);
         Long activeAsn = supplierMapper.countActiveAsn(supplierId);
         Long todayArriving = supplierMapper.countTodayArriving(supplierId);
+        Long pendingForecast = supplierMapper.countPendingForecast(supplierId);
 
         return Map.of(
                 "pendingOrders", pendingOrders != null ? pendingOrders : 0,
                 "activeAsn", activeAsn != null ? activeAsn : 0,
-                "todayArriving", todayArriving != null ? todayArriving : 0
+                "todayArriving", todayArriving != null ? todayArriving : 0,
+                "pendingForecast", pendingForecast != null ? pendingForecast : 0
         );
     }
 
@@ -191,7 +193,8 @@ public class GenericTableLookupRepository {
         return Map.of(
                 "pendingOrders", pendingOrders != null ? pendingOrders : 0,
                 "activeAsn", activeAsn != null ? activeAsn : 0,
-                "todayArriving", todayArriving != null ? todayArriving : 0
+                "todayArriving", todayArriving != null ? todayArriving : 0,
+                "pendingForecast", 0L
         );
     }
 

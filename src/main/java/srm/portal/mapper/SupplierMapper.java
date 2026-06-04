@@ -52,6 +52,8 @@ public interface SupplierMapper {
 
     Long countTodayArrivingAll();
 
+    Long countPendingForecast(@Param("supplierId") Long supplierId);
+
     Map<String, Object> findBladeUserByAccount(@Param("account") String account,
             @Param("tenantId") Long tenantId,
             @Param("accountColumn") String accountColumn);

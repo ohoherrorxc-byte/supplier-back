@@ -94,6 +94,18 @@
         WHERE actual_eta_date = CURDATE() AND status = 'SHIPPED' AND IFNULL(is_deleted, 0) = 0
     </select>
 
+    <!-- 统计待确认预测数量 -->
+    <select id="countPendingForecast" resultType="long">
+        SELECT COUNT(DISTINCT d.id)
+        FROM tb_purchase_parts_order_detail d
+        INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
+        WHERE IFNULL(d.is_deleted, 0) = 0
+          AND IFNULL(o.is_deleted, 0) = 0
+          AND o.require_attr = '预测'
+          AND d.supplier_order_status = 0
+          AND o.supplier_id = #{supplierId}
+    </select>
+
     <!-- 查询用户认证信息 -->
     <select id="findBladeUserByAccount" resultType="map">
         SELECT * FROM blade_user WHERE ${accountColumn} = #{account} AND tenant_id = #{tenantId} AND IFNULL(is_deleted, 0) = 0
