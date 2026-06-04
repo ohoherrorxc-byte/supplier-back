@@ -241,7 +241,7 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("feedbackStatus") String feedbackStatus
+            @Param("supplierOrderStatus") String supplierOrderStatus
     );
 
     /**
@@ -253,7 +253,7 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("feedbackStatus") String feedbackStatus
+            @Param("supplierOrderStatus") String supplierOrderStatus
     );
 
     /**
@@ -279,7 +279,7 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("feedbackStatus") String feedbackStatus
+            @Param("supplierOrderStatus") String supplierOrderStatus
     );
 
     /**

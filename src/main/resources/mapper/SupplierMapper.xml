@@ -102,6 +102,7 @@
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
+          AND o.cover_predict_status != 2
           AND d.supplier_order_status = 0
           AND o.supplier_id = #{supplierId}
     </select>
