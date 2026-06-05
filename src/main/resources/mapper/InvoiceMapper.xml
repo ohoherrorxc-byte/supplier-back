@@ -182,7 +182,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -242,7 +242,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -290,7 +290,7 @@
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
           AND pcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
@@ -327,7 +327,7 @@
 
     <!-- 查询待开票清单 - BOM采购（一次查询，分页+同一验收单不被拆散） -->
     <select id="listPendingInvoiceBomByPage" resultMap="PendingInvoiceItemResultMap">
-        SELECT d.ID AS accept_detail_id,
+        SELECT DISTINCT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
                a.DOC_TITLE AS doc_title,
                d.PARTS_NO AS parts_no,
@@ -359,7 +359,8 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
+          AND hp.END_TIME_ IS NOT NULL
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -376,8 +377,8 @@
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
-       
-        ORDER BY hp.END_TIME_ DESC
+
+        ORDER BY a.APPLY_NO DESC, d.ID ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -456,7 +457,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -477,7 +478,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -546,7 +547,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
