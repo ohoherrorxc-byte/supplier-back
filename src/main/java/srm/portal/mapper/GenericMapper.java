@@ -193,6 +193,15 @@ public interface GenericMapper {
     String findSupplierAdminByUserId(@Param("userId") Long userId);
 
     /**
+     * 判断用户是否只允许开票（only_open_invoice）
+     */
+    @Select("""
+            SELECT only_open_invoice FROM blade_user
+            WHERE id = #{userId} AND IFNULL(is_deleted, 0) = 0
+            """)
+    String findOnlyOpenInvoiceByUserId(@Param("userId") Long userId);
+
+    /**
      * 修改密码
      */
     @Update("""

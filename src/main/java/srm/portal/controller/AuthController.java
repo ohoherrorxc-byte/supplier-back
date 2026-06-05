@@ -71,6 +71,9 @@ public class AuthController {
         // 判断是否供应商客户
         boolean isSupplierClient = isSupplierClient(userId);
 
+        // 判断是否只允许开票
+        boolean onlyOpenInvoice = isOnlyOpenInvoice(userId);
+
         // 获取供应商编号
         String supplierNo = null;
         Map<String, Object> supplier = genericMapper.findSupplierByUserId(userId);
@@ -90,6 +93,7 @@ public class AuthController {
                 "userName", userName,
                 "isAdmin", isAdmin,
                 "isSupplierClient", isSupplierClient,
+                "onlyOpenInvoice", onlyOpenInvoice,
                 "supplierNo", supplierNo != null ? supplierNo : ""
         ));
     }
@@ -205,6 +209,16 @@ public class AuthController {
         String client = genericMapper.findSupplierClientByUserId(userId);
         if (client == null) return false;
         String trimmed = client.trim();
+        return "是".equals(trimmed) || "1".equals(trimmed) || "true".equalsIgnoreCase(trimmed);
+    }
+
+    /**
+     * 判断用户是否只允许开票
+     */
+    private boolean isOnlyOpenInvoice(Long userId) {
+        String val = genericMapper.findOnlyOpenInvoiceByUserId(userId);
+        if (val == null) return false;
+        String trimmed = val.trim();
         return "是".equals(trimmed) || "1".equals(trimmed) || "true".equalsIgnoreCase(trimmed);
     }
 
