@@ -38,6 +38,10 @@ public class AuthController {
         Object dbPasswordObj = getValueIgnoreCase(user, "password");
         String dbPassword = dbPasswordObj == null ? "" : String.valueOf(dbPasswordObj);
         String newPasswordHash = sha1(password);
+        System.out.println("=== login debug ===");
+        System.out.println("input password: " + password);
+        System.out.println("input hash: " + newPasswordHash);
+        System.out.println("db password: " + dbPassword);
         if (!dbPassword.equalsIgnoreCase(newPasswordHash)) {
             return ResponseEntity.status(401).body(Map.of("message", "密码错误"));
         }
@@ -126,13 +130,18 @@ public class AuthController {
             // 验证旧密码
             Object dbPasswordObj = getValueIgnoreCase(user, "password");
             String dbPassword = dbPasswordObj == null ? "" : String.valueOf(dbPasswordObj);
-            boolean pwdMatch = dbPassword.equalsIgnoreCase(sha1(oldPassword));
+            String inputHash = sha1(md5(oldPassword));
+            System.out.println("=== change-password debug ===");
+            System.out.println("input oldPassword: " + oldPassword);
+            System.out.println("input hash: " + inputHash);
+            System.out.println("db password: " + dbPassword);
+            boolean pwdMatch = dbPassword.equalsIgnoreCase(inputHash);
             if (!pwdMatch) {
                 return ResponseEntity.status(400).body(Map.of("message", "旧密码错误"));
             }
 
             // 更新密码
-            String encryptedNewPassword = sha1(newPassword);
+            String encryptedNewPassword = sha1(md5(newPassword));
             int updated = genericMapper.updatePassword(userId, encryptedNewPassword);
 
             if (updated == 0) {
@@ -166,6 +175,22 @@ public class AuthController {
     private String sha1(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] messageDigest = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : messageDigest) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return input;
+        }
+    }
+
+    private String md5(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] messageDigest = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder();
             for (byte b : messageDigest) {
