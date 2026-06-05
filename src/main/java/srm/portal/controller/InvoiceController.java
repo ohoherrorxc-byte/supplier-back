@@ -99,10 +99,13 @@ public class InvoiceController {
                 adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
             }
             int offset = (pageNum - 1) * pageSize;
+            System.out.println("====> BOM listPendingInvoiceBomByPage: supplierNo=" + supplierNo + ", isAdmin=" + adminFlag + ", pageSize=" + pageSize + ", pageNum=" + pageNum + ", offset=" + offset);
 
             // 直接查询明细（SQL内部分页，同一验收单不会被拆散）
             List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByPage(
                 supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, pageSize, offset);
+
+            System.out.println("====> returned items size: " + (items != null ? items.size() : 0));
 
             // 总数使用专门的数量统计查询
             long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, adminFlag);

@@ -378,6 +378,7 @@
           </if>
        
         ORDER BY hp.END_TIME_ DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!-- 根据验收单号列表查询待开票明细 - BOM采购（带验收单号过滤） -->
