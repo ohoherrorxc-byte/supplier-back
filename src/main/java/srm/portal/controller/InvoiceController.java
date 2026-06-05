@@ -100,13 +100,9 @@ public class InvoiceController {
             }
             int offset = (pageNum - 1) * pageSize;
 
-            // 先按验收单号分页查询（不查明细）
-            List<String> applyNos = invoiceMapper.listPendingInvoiceBomByPage(
+            // 直接查询明细（SQL内部分页，同一验收单不会被拆散）
+            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByPage(
                 supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, pageSize, offset);
-
-            // 根据验收单号列表查询所有明细
-            List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByAcceptApplyNos(
-                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, applyNos);
 
             // 总数使用专门的数量统计查询
             long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, adminFlag);
@@ -129,6 +125,44 @@ public class InvoiceController {
             return null;
         }
         return invoiceMapper.getSupplierNoBySupplierId(supplierId);
+    }
+
+    /**
+     * 根据验收单号列表查询所有明细（用于生成结算单）
+     */
+    @GetMapping("/details/by-apply-nos")
+    public ResponseEntity<PendingInvoiceResponse> getDetailsByApplyNos(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String supplierNo,
+            @RequestParam(required = false) Boolean isAdmin,
+            @RequestParam List<String> applyNos,
+            @RequestParam String type  // "general" 或 "bom"
+    ) {
+        try {
+            // 如果前端没传，则后端查询
+            if (supplierNo == null && userId != null) {
+                supplierNo = getSupplierNoByUserId(userId);
+            }
+            boolean adminFlag = Boolean.TRUE.equals(isAdmin);
+            if (isAdmin == null && userId != null) {
+                adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
+            }
+
+            List<PendingInvoiceItem> items;
+            if ("bom".equals(type)) {
+                items = invoiceMapper.listPendingInvoiceBomByAcceptApplyNosSimple(supplierNo, adminFlag, applyNos);
+            } else {
+                items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNosSimple(supplierNo, adminFlag, applyNos);
+            }
+
+            PendingInvoiceResponse resp = new PendingInvoiceResponse();
+            resp.setItems(items);
+            resp.setTotal((long) items.size());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(null);
+        }
     }
 
     /**

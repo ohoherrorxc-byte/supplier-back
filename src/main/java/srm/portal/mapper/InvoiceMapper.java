@@ -81,9 +81,9 @@ public interface InvoiceMapper {
     );
 
     /**
-     * 查询待开票清单 - BOM采购（按验收单号分页）
+     * 查询待开票清单 - BOM采购（一次查询，分页+同一验收单不被拆散）
      */
-    List<String> listPendingInvoiceBomByPage(
+    List<PendingInvoiceItem> listPendingInvoiceBomByPage(
             @Param("supplierNo") String supplierNo,
             @Param("acceptApplyNo") String acceptApplyNo,
             @Param("orderNo") String orderNo,
@@ -103,6 +103,15 @@ public interface InvoiceMapper {
             @Param("orderNo") String orderNo,
             @Param("partsNo") String partsNo,
             @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("acceptApplyNos") List<String> acceptApplyNos
+    );
+
+    /**
+     * 根据验收单号列表查询待开票明细 - BOM采购（简单版，仅用 acceptApplyNos 过滤）
+     */
+    List<PendingInvoiceItem> listPendingInvoiceBomByAcceptApplyNosSimple(
+            @Param("supplierNo") String supplierNo,
             @Param("isAdmin") boolean isAdmin,
             @Param("acceptApplyNos") List<String> acceptApplyNos
     );

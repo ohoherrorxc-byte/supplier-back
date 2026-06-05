@@ -149,58 +149,7 @@
         ORDER BY hp.END_TIME_ DESC
     </select>
 
-    <!-- 根据验收单号列表查询待开票明细 - 一般采购（简化版，仅用 acceptApplyNos 过滤） -->
-    <select id="listPendingInvoiceGeneralByAcceptApplyNosSimple" resultMap="PendingInvoiceItemResultMap">
-        SELECT DISTINCT d.ID AS accept_detail_id,
-               a.APPLY_NO AS accept_apply_no,
-               a.DOC_TITLE AS doc_title,
-               d.PARTS_NO AS parts_no,
-               d.PARTS_NAME AS parts_name,
-               d.REMARK AS remark,
-               d.UNIT_NAME AS unit_name,
-               d.QUANTITY AS quantity,
-               d.TOTAL_PRICE_RMB AS amount,
-               a.ACCEPT_CATEGORY AS accept_category,
-               a.STATUS AS accept_status,
-               pc.SUPPLIER_NO AS supplier_no,
-               cs.SUPPLIER_NAME AS supplier_name,
-               a.PURCHASE_CONTRACT_NO AS contract_no,
-               a.PURCHASE_CONTRACT_NAME AS contract_name,
-               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
-               a.PROCESS_INSTANCE_ID AS process_instance_id,
-               pcd.PROJECT_NAME AS project_name,
-               pc.PURCHASE_ORDER_TYPE AS purchase_order_type
-        FROM tb_accept_apply_detail d
-        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
-        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
-        LEFT JOIN tb_contract_supplier cs ON pc.SUPPLIER_NO = cs.SUPPLIER_NO AND cs.IS_DELETED = 0
-        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
-        LEFT JOIN tb_purchase_contract_detail pcd ON a.PURCHASE_APPLY_NO = pcd.PURCHASE_NO AND pcd.IS_DELETED = 0
-        WHERE a.STATUS = 1
-          AND a.ACCEPT_CATEGORY = 1
-          AND d.IS_DELETED = 0
-          AND a.IS_DELETED = 0
-          AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
-          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
-          AND NOT EXISTS (
-              SELECT 1 FROM tb_purchase_contract_pay pcp
-              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
-          )
-          <if test="supplierNo != null and supplierNo != ''">
-              AND pc.SUPPLIER_NO = #{supplierNo}
-          </if>
-          <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
-              AND a.APPLY_NO IN
-              <foreach collection="acceptApplyNos" item="no" open="(" separator="," close=")">
-                  #{no}
-              </foreach>
-          </if>
-        ORDER BY hp.END_TIME_ DESC
-    </select>
-
-    <!-- 根据验收单号列表查询待开票明细 - BOM采购 -->
-    <select id="listPendingInvoiceBomByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
+        <select id="listPendingInvoiceBomByAcceptApplyNos" resultMap="PendingInvoiceItemResultMap">
         SELECT DISTINCT d.ID AS accept_detail_id,
                a.APPLY_NO AS accept_apply_no,
                a.DOC_TITLE AS doc_title,
@@ -233,7 +182,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -249,6 +198,102 @@
           </if>
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+          <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
+              AND a.APPLY_NO IN
+              <foreach collection="acceptApplyNos" item="no" open="(" separator="," close=")">
+                  #{no}
+              </foreach>
+          </if>
+        ORDER BY hp.END_TIME_ DESC
+    </select>
+
+    <!-- 根据验收单号列表查询待开票明细 - BOM采购（简单版） -->
+    <select id="listPendingInvoiceBomByAcceptApplyNosSimple" resultMap="PendingInvoiceItemResultMap">
+        SELECT DISTINCT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               bc.SUPPLIER_NO AS supplier_no,
+               bc.SUPPLIER_NAME AS supplier_name,
+               a.BOM_PURCHASE_ORDER_NO AS contract_no,
+               a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               pd.PROJECT_NAME AS project_name,
+               po.PURCHASE_ORDER_TYPE AS purchase_order_type
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
+          AND bcp.ACCEPT_APPLY_NO IS NULL
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
+              AND a.APPLY_NO IN
+              <foreach collection="acceptApplyNos" item="no" open="(" separator="," close=")">
+                  #{no}
+              </foreach>
+          </if>
+        ORDER BY hp.END_TIME_ DESC
+    </select>
+
+    <!-- 根据验收单号列表查询待开票明细 - 一般采购（简单版） -->
+    <select id="listPendingInvoiceGeneralByAcceptApplyNosSimple" resultMap="PendingInvoiceItemResultMap">
+        SELECT DISTINCT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               pc.SUPPLIER_NO AS supplier_no,
+               cs.SUPPLIER_NAME AS supplier_name,
+               a.PURCHASE_CONTRACT_NO AS contract_no,
+               a.PURCHASE_CONTRACT_NAME AS contract_name,
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               pcd.PROJECT_NAME AS project_name,
+               pc.PURCHASE_ORDER_TYPE AS purchase_order_type
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
+        LEFT JOIN tb_contract_supplier cs ON pc.SUPPLIER_NO = cs.SUPPLIER_NO AND cs.IS_DELETED = 0
+        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
+        LEFT JOIN tb_purchase_contract_detail pcd ON a.PURCHASE_APPLY_NO = pcd.PURCHASE_NO AND pcd.IS_DELETED = 0
+        LEFT JOIN tb_purchase_contract_pay pcp ON pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 1
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND pc.IS_DELETED = 0
+          AND pcp.ACCEPT_APPLY_NO IS NULL
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
           <if test="acceptApplyNos != null and acceptApplyNos.size > 0">
               AND a.APPLY_NO IN
@@ -280,13 +325,32 @@
           </if>
     </select>
 
-    <!-- 查询待开票清单 - BOM采购（按验收单号分页） -->
-    <select id="listPendingInvoiceBomByPage" resultType="string">
-        SELECT DISTINCT a.APPLY_NO
+    <!-- 查询待开票清单 - BOM采购（一次查询，分页+同一验收单不被拆散） -->
+    <select id="listPendingInvoiceBomByPage" resultMap="PendingInvoiceItemResultMap">
+        SELECT d.ID AS accept_detail_id,
+               a.APPLY_NO AS accept_apply_no,
+               a.DOC_TITLE AS doc_title,
+               d.PARTS_NO AS parts_no,
+               d.PARTS_NAME AS parts_name,
+               d.REMARK AS remark,
+               d.UNIT_NAME AS unit_name,
+               d.QUANTITY AS quantity,
+               d.TOTAL_PRICE_RMB AS amount,
+               a.ACCEPT_CATEGORY AS accept_category,
+               a.STATUS AS accept_status,
+               bc.SUPPLIER_NO AS supplier_no,
+               bc.SUPPLIER_NAME AS supplier_name,
+               a.BOM_PURCHASE_ORDER_NO AS contract_no,
+               a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
+               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
+               a.PROCESS_INSTANCE_ID AS process_instance_id,
+               pd.PROJECT_NAME AS project_name,
+               po.PURCHASE_ORDER_TYPE AS purchase_order_type
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
         WHERE a.STATUS = 1
@@ -295,7 +359,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -312,8 +376,8 @@
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
+       
         ORDER BY hp.END_TIME_ DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!-- 根据验收单号列表查询待开票明细 - BOM采购（带验收单号过滤） -->
@@ -391,7 +455,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -481,7 +545,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
