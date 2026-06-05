@@ -476,7 +476,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND CASE WHEN a.ACCEPT_TYPE = 2 THEN COALESCE(po.CREATE_TIME) ELSE a.CREATE_TIME END >= '2026-05-28 00:00:00'
+          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
