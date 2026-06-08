@@ -13,6 +13,7 @@ import srm.portal.service.OcrInvoiceService;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/invoice")
@@ -21,6 +22,7 @@ public class InvoiceController {
     private final FlowFileMapper flowFileMapper;
     private final OcrInvoiceService ocrInvoiceService;
     private final TransactionTemplate transactionTemplate;
+    private final AtomicLong idGenerator = new AtomicLong(System.currentTimeMillis() * 1000 + (new Random().nextInt(1000)));
 
     public InvoiceController(InvoiceMapper invoiceMapper, FlowFileMapper flowFileMapper, OcrInvoiceService ocrInvoiceService, TransactionTemplate transactionTemplate) {
         this.invoiceMapper = invoiceMapper;
@@ -306,7 +308,7 @@ public class InvoiceController {
                         Long attachmentId = null;
                         if (reqLine.getAttachmentUrl() != null && !reqLine.getAttachmentUrl().isEmpty()) {
                             FlowFile flowFile = new FlowFile();
-                            flowFile.setId(System.currentTimeMillis());
+                            flowFile.setId(idGenerator.incrementAndGet());
                             flowFile.setBusinessId(settlementId);
                             flowFile.setBusinessName("supplierInvoice");
                             flowFile.setUrl(reqLine.getAttachmentUrl());
@@ -318,7 +320,7 @@ public class InvoiceController {
                         }
 
                         SettlementInvoiceLine line = new SettlementInvoiceLine();
-                        line.setId(System.currentTimeMillis());
+                        line.setId(idGenerator.incrementAndGet());
                         line.setSettlementId(settlementId);
                         line.setInvoiceNo(reqLine.getInvoiceNo());
                         line.setInvoiceDate(reqLine.getInvoiceDate() != null ? reqLine.getInvoiceDate().toString() : null);
@@ -343,7 +345,7 @@ public class InvoiceController {
                 if (completionFiles != null && !completionFiles.isEmpty()) {
                     for (CompletionFileRequest file : completionFiles) {
                         invoiceMapper.insertCompletionFile(
-                            System.currentTimeMillis(),
+                            idGenerator.incrementAndGet(),
                             settlementId,
                             "completionDoc",
                             file.getUrl(),
@@ -358,7 +360,7 @@ public class InvoiceController {
                 if (orderFiles != null && !orderFiles.isEmpty()) {
                     for (CompletionFileRequest file : orderFiles) {
                         invoiceMapper.insertCompletionFile(
-                            System.currentTimeMillis(),
+                            idGenerator.incrementAndGet(),
                             settlementId,
                             "orderDoc",
                             file.getUrl(),
