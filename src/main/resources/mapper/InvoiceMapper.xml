@@ -68,7 +68,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+         
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_purchase_contract_pay pcp
@@ -122,7 +122,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_purchase_contract_pay pcp
@@ -182,7 +182,6 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -242,7 +241,6 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -290,7 +288,6 @@
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
           AND pcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
@@ -314,7 +311,7 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
+
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_purchase_contract_pay pcp
@@ -359,7 +356,6 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND hp.END_TIME_ IS NOT NULL
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
@@ -457,7 +453,6 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -478,7 +473,7 @@
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
+
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -522,7 +517,6 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND pc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-28 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_purchase_contract_pay pcp
@@ -547,7 +541,6 @@
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND a.CREATE_TIME >= '2026-05-27 00:00:00'
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
