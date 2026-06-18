@@ -19,6 +19,7 @@ public class SettlementOrderItem {
     private String acceptApplyNo;
     private String bomPurchaseOrderNo;
     private String contractNo;
+    private String currency;
 
     public Long getId() {
         return id;
@@ -114,5 +115,13 @@ public class SettlementOrderItem {
 
     public void setContractNo(String contractNo) {
         this.contractNo = contractNo;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 }

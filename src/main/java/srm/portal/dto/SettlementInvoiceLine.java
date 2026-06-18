@@ -22,6 +22,7 @@ public class SettlementInvoiceLine {
     private String acceptApplyNo;
     private BigDecimal quantity;
     private String unit;
+    private String currency;
 
     public Long getId() {
         return id;
@@ -149,5 +150,13 @@ public class SettlementInvoiceLine {
 
     public void setUnit(String unit) {
         this.unit = unit;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 }
