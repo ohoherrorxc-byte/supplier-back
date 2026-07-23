@@ -65,36 +65,9 @@ public class OcrInvoiceService {
             }
 
             if (isPdf) {
-                // PDF: 转成图片后用增值税发票识别（1000次配额）
-                List<byte[]> imagePages = pdfToImages(fileBytes);
-                List<Map<String, Object>> allInvoiceResults = new ArrayList<>();
-                Map<String, Object> mergedResult = new HashMap<>();
-
-                for (int i = 0; i < imagePages.size(); i++) {
-                    byte[] pageImage = imagePages.get(i);
-                    Map<String, Object> pageResult = callVatInvoiceOcr(pageImage, "page_" + i + ".png");
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> pageInvoices = (List<Map<String, Object>>) pageResult.get("invoiceResults");
-                    if (pageInvoices != null) {
-                        allInvoiceResults.addAll(pageInvoices);
-                    }
-                }
-
-                mergedResult.put("invoiceResults", allInvoiceResults);
-                mergedResult.put("count", allInvoiceResults.size());
-                mergedResult.put("success", !allInvoiceResults.isEmpty());
-                mergedResult.put("message", "PDF 识别到 " + allInvoiceResults.size() + " 条发票");
-                if (!allInvoiceResults.isEmpty()) {
-                    Map<String, Object> first = allInvoiceResults.get(0);
-                    mergedResult.put("invoiceNo", first.get("invoiceNo"));
-                    mergedResult.put("invoiceDate", first.get("invoiceDate"));
-                    mergedResult.put("totalAmount", first.get("totalAmount"));
-                    mergedResult.put("taxAmount", first.get("taxAmount"));
-                    mergedResult.put("taxRate", first.get("taxRate"));
-                    mergedResult.put("projectName", first.get("projectName"));
-                    mergedResult.put("partNo", first.get("partNo"));
-                }
-                return mergedResult;
+                // PDF: 先用 multiple_invoice 智能财务票据识别（pdf_file+type=vat_invoice）
+                // 配额/限流/返回空结果时回退到 PDF 转图片 + vat_invoice
+                return callGeneralOcr(fileBytes, fileName);
             } else {
                 // 图片直接用增值税发票识别
                 return callVatInvoiceOcr(fileBytes, fileName);
@@ -155,43 +128,40 @@ public class OcrInvoiceService {
     private Map<String, Object> callGeneralOcr(byte[] fileBytes, String fileName) throws Exception {
         String token = getAccessToken(true);
 
-        // PDF: 先转成图片列表，再逐页 OCR 识别
+        // PDF: 先用 multiple_invoice 直接传 PDF（智能财务票据识别支持 PDF）
+        // 如配额/限流相关错误则回退到 PDF 转图片 + vat_invoice 路径
         if (fileName.toLowerCase().endsWith(".pdf")) {
-            List<byte[]> imagePages = pdfToImages(fileBytes);
-            List<Map<String, Object>> allInvoiceResults = new ArrayList<>();
-            Map<String, Object> mergedResult = new HashMap<>();
+            // 第一步：尝试直接 POST PDF 给 multiple_invoice（用 pdf_file 参数 + type=vat_invoice 指定识别模板）
+            String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
+            String pdfBase64 = Base64.getEncoder().encodeToString(fileBytes);
+            String formData = "pdf_file=" + java.net.URLEncoder.encode(pdfBase64, StandardCharsets.UTF_8)
+                + "&type=" + java.net.URLEncoder.encode("vat_invoice", StandardCharsets.UTF_8);
+            String response = doPost(requestUrl, formData);
 
-            for (int i = 0; i < imagePages.size(); i++) {
-                byte[] pageImage = imagePages.get(i);
-                String pageBase64 = Base64.getEncoder().encodeToString(pageImage);
-                String formData = "image=" + java.net.URLEncoder.encode(pageBase64, StandardCharsets.UTF_8);
-                String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
+            try {
+                JsonNode root = objectMapper.readTree(response);
+                // 记录完整原始响应（排查用）
+                System.out.println("=== multiple_invoice(PDF) 原始响应: " + response.substring(0, Math.min(500, response.length())) + " ===");
 
-                String response = doPost(requestUrl, formData);
-                Map<String, Object> pageResult = parseMultipleInvoiceResponse(response);
-
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> pageInvoices = (List<Map<String, Object>>) pageResult.get("invoiceResults");
-                if (pageInvoices != null) {
-                    allInvoiceResults.addAll(pageInvoices);
+                if (root.has("error_code")) {
+                    int errorCode = root.get("error_code").asInt();
+                    // 任意 error_code 都视为 multiple_invoice 不可用，统一回退
+                    // 17/18/19=配额相关, 其他常见: 13=open api qps, 14=auth, 100=invalid param, 216201=PDF格式, 17x=文件相关
+                    System.out.println("=== multiple_invoice(PDF) 返回 error_code=" + errorCode + ", 回退到 PDF转图片+vat_invoice ===");
+                    return fallbackPdfToVatInvoice(fileBytes);
                 }
+                // 识别成功但没有结果，也回退
+                if (root.has("words_result") && root.get("words_result").isArray()
+                    && root.get("words_result").size() == 0) {
+                    System.out.println("=== multiple_invoice(PDF) 返回空结果, 回退到 PDF转图片+vat_invoice ===");
+                    return fallbackPdfToVatInvoice(fileBytes);
+                }
+            } catch (Exception parseEx) {
+                System.out.println("=== multiple_invoice(PDF) 响应解析异常, 回退到 PDF转图片+vat_invoice ===");
+                return fallbackPdfToVatInvoice(fileBytes);
             }
 
-            mergedResult.put("invoiceResults", allInvoiceResults);
-            mergedResult.put("count", allInvoiceResults.size());
-            mergedResult.put("success", !allInvoiceResults.isEmpty());
-            mergedResult.put("message", "PDF 识别到 " + allInvoiceResults.size() + " 条发票");
-            if (!allInvoiceResults.isEmpty()) {
-                Map<String, Object> first = allInvoiceResults.get(0);
-                mergedResult.put("invoiceNo", first.get("invoiceNo"));
-                mergedResult.put("invoiceDate", first.get("invoiceDate"));
-                mergedResult.put("totalAmount", first.get("totalAmount"));
-                mergedResult.put("taxAmount", first.get("taxAmount"));
-                mergedResult.put("taxRate", first.get("taxRate"));
-                mergedResult.put("projectName", first.get("projectName"));
-                mergedResult.put("partNo", first.get("partNo"));
-            }
-            return mergedResult;
+            return parseMultipleInvoiceResponse(response);
         } else {
             // 图片直接用通用识别
             String requestUrl = MULTIPLE_INVOICE_URL + "?access_token=" + token;
@@ -200,6 +170,41 @@ public class OcrInvoiceService {
             String response = doPost(requestUrl, formData);
             return parseMultipleInvoiceResponse(response);
         }
+    }
+
+    /**
+     * 回退方案：PDF 转图片后逐页用 增值税发票识别（vat_invoice）
+     */
+    private Map<String, Object> fallbackPdfToVatInvoice(byte[] fileBytes) throws Exception {
+        List<byte[]> imagePages = pdfToImages(fileBytes);
+        List<Map<String, Object>> allInvoiceResults = new ArrayList<>();
+        Map<String, Object> mergedResult = new HashMap<>();
+
+        for (int i = 0; i < imagePages.size(); i++) {
+            byte[] pageImage = imagePages.get(i);
+            Map<String, Object> pageResult = callVatInvoiceOcr(pageImage, "page_" + i + ".png");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> pageInvoices = (List<Map<String, Object>>) pageResult.get("invoiceResults");
+            if (pageInvoices != null) {
+                allInvoiceResults.addAll(pageInvoices);
+            }
+        }
+
+        mergedResult.put("invoiceResults", allInvoiceResults);
+        mergedResult.put("count", allInvoiceResults.size());
+        mergedResult.put("success", !allInvoiceResults.isEmpty());
+        mergedResult.put("message", "PDF 识别到 " + allInvoiceResults.size() + " 条发票（回退路径）");
+        if (!allInvoiceResults.isEmpty()) {
+            Map<String, Object> first = allInvoiceResults.get(0);
+            mergedResult.put("invoiceNo", first.get("invoiceNo"));
+            mergedResult.put("invoiceDate", first.get("invoiceDate"));
+            mergedResult.put("totalAmount", first.get("totalAmount"));
+            mergedResult.put("taxAmount", first.get("taxAmount"));
+            mergedResult.put("taxRate", first.get("taxRate"));
+            mergedResult.put("projectName", first.get("projectName"));
+            mergedResult.put("partNo", first.get("partNo"));
+        }
+        return mergedResult;
     }
 
     /**

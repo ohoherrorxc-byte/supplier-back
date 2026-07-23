@@ -217,6 +217,11 @@ public interface InvoiceMapper {
     List<Map<String, Object>> findDraftSettlements(@Param("acceptDetailIds") List<Long> acceptDetailIds);
 
     /**
+     * 检查是否有已提交/已结算/已付款的结算单包含指定验收明细
+     */
+    List<Map<String, Object>> findSubmittedSettlements(@Param("acceptDetailIds") List<Long> acceptDetailIds);
+
+    /**
      * 获取结算单的完工单附件
      */
     List<Map<String, Object>> getCompletionFiles(@Param("settlementId") Long settlementId);

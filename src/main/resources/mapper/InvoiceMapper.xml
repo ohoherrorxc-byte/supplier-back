@@ -75,6 +75,10 @@
               SELECT 1 FROM tb_purchase_contract_pay pcp
               WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -128,6 +132,10 @@
           AND NOT EXISTS (
               SELECT 1 FROM tb_purchase_contract_pay pcp
               WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
           )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
@@ -318,6 +326,10 @@
               SELECT 1 FROM tb_purchase_contract_pay pcp
               WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -359,6 +371,10 @@
           AND bcp.ACCEPT_APPLY_NO IS NULL
           AND hp.END_TIME_ IS NOT NULL
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -416,6 +432,10 @@
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
               WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -455,6 +475,10 @@
           AND bc.IS_DELETED = 0
           AND bcp.ACCEPT_APPLY_NO IS NULL
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -523,6 +547,10 @@
               SELECT 1 FROM tb_purchase_contract_pay pcp
               WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
           )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND pc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -546,6 +574,10 @@
           AND NOT EXISTS (
               SELECT 1 FROM tb_bom_purchase_contract_pay bcp
               WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
           )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
@@ -723,6 +755,23 @@
           AND (
             <foreach collection="acceptDetailIds" item="id" separator=" OR ">
                 JSON_CONTAINS(ACCEPT_DETAIL_IDS, CAST(#{id} AS JSON))
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%"', #{id}, '"%')
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%,', #{id}, '%')
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%[', #{id}, ']%')
+            </foreach>
+          )
+    </select>
+
+    <select id="findSubmittedSettlements" resultType="map">
+        SELECT ID AS id, SETTLEMENT_NO AS settlementNo, STATUS AS status
+        FROM tb_settlement_order
+        WHERE IS_DELETED = 0 AND STATUS > 0
+          AND (
+            <foreach collection="acceptDetailIds" item="id" separator=" OR ">
+                JSON_CONTAINS(ACCEPT_DETAIL_IDS, CAST(#{id} AS JSON))
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%"', #{id}, '"%')
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%,', #{id}, '%')
+                OR ACCEPT_DETAIL_IDS LIKE CONCAT('%[', #{id}, ']%')
             </foreach>
           )
     </select>

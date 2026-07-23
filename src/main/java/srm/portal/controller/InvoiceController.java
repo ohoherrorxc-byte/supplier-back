@@ -469,12 +469,22 @@ public class InvoiceController {
     @PostMapping("/settlement/check")
     public ResponseEntity<Map<String, Object>> checkDraftSettlement(@RequestBody List<Long> acceptDetailIds) {
         try {
+            // 1) 查草稿
             List<Map<String, Object>> drafts = invoiceMapper.findDraftSettlements(acceptDetailIds);
             if (!drafts.isEmpty()) {
                 return ResponseEntity.ok(Map.of(
                     "hasDraft", true,
                     "settlementNo", drafts.get(0).get("settlementNo"),
-                    "message", "已有草稿结算单 " + drafts.get(0).get("settlementNo") + "，请勿重复操作"
+                    "message", "已有结算单草稿 " + drafts.get(0).get("settlementNo") + "，请勿重复生成"
+                ));
+            }
+            // 2) 查已提交/已结算/已付款（这些验收明细不允许再生成新结算单）
+            List<Map<String, Object>> submitted = invoiceMapper.findSubmittedSettlements(acceptDetailIds);
+            if (!submitted.isEmpty()) {
+                return ResponseEntity.ok(Map.of(
+                    "hasDraft", true,
+                    "settlementNo", submitted.get(0).get("settlementNo"),
+                    "message", "已存在结算单 " + submitted.get(0).get("settlementNo") + "，请勿重复生成"
                 ));
             }
             return ResponseEntity.ok(Map.of("hasDraft", false));
