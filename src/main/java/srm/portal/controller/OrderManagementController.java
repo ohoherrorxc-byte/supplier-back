@@ -240,20 +240,25 @@ public class OrderManagementController {
             return ResponseEntity.ok().headers(headers).body(excelBytes);
         } catch (Exception ex) {
             ex.printStackTrace();
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(500).body(("导出失败: " + ex.getClass().getSimpleName() + ": " + ex.getMessage()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
     }
 
     private byte[] generatePurchasePlanExcel(List<Map<String, Object>> items) throws IOException {
+        // 在无头容器（无 AWT 字体）中显式禁用 POI 的字体初始化
+        System.setProperty("java.awt.headless", "true");
+        System.setProperty("org.apache.poi.scratch.avoid", "true");
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("采购计划");
 
+            // 为样式显式指定一个内置字体，避免 POI 在某些无字体容器里隐式初始化字体导致崩溃。
+            org.apache.poi.ss.usermodel.Font baseFont = workbook.createFont();
+            baseFont.setFontName("SansSerif");
+
             CellStyle headerStyle = workbook.createCellStyle();
-            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
+            headerStyle.setFont(baseFont);
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setBorderBottom(BorderStyle.THIN);
@@ -262,13 +267,17 @@ public class OrderManagementController {
             headerStyle.setBorderRight(BorderStyle.THIN);
 
             CellStyle dataStyle = workbook.createCellStyle();
+            dataStyle.setFont(baseFont);
             dataStyle.setBorderBottom(BorderStyle.THIN);
             dataStyle.setBorderTop(BorderStyle.THIN);
             dataStyle.setBorderLeft(BorderStyle.THIN);
             dataStyle.setBorderRight(BorderStyle.THIN);
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"预测单号", "预测释放时间", "供应商名称", "预测需求总数", "待确认需求数量", "已确认需求数量", "预测状态"};
+            String[] headers = {
+                "预测单号", "物料号", "物料名称", "需求日期", "预测释放时间",
+                "供应商名称", "需求数量", "待确认数量", "已确认数量", "状态"
+            };
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -278,33 +287,64 @@ public class OrderManagementController {
             int rowNum = 1;
             for (Map<String, Object> item : items) {
                 Row row = sheet.createRow(rowNum++);
-                row.createCell(0).setCellValue(item.get("order_no") != null ? item.get("order_no").toString() : "");
-                row.createCell(1).setCellValue(item.get("forecast_release_date") != null ? item.get("forecast_release_date").toString() : "");
-                row.createCell(2).setCellValue(item.get("supplier_name") != null ? item.get("supplier_name").toString() : "");
-                row.createCell(3).setCellValue(item.get("forecast_total_qty") != null ? ((Number) item.get("forecast_total_qty")).doubleValue() : 0);
-                row.createCell(4).setCellValue(item.get("forecast_pending_qty") != null ? ((Number) item.get("forecast_pending_qty")).doubleValue() : 0);
-                row.createCell(5).setCellValue(item.get("forecast_confirmed_qty") != null ? ((Number) item.get("forecast_confirmed_qty")).doubleValue() : 0);
+                row.createCell(0).setCellValue(strValue(item.get("order_no")));
+                row.createCell(1).setCellValue(strValue(item.get("parts_number")));
+                row.createCell(2).setCellValue(strValue(item.get("parts_name")));
+                row.createCell(3).setCellValue(strValue(item.get("plan_period")));
+                row.createCell(4).setCellValue(strValue(item.get("forecast_release_date")));
+                row.createCell(5).setCellValue(strValue(item.get("supplier_name")));
+                row.createCell(6).setCellValue(numValue(item.get("forecast_total_qty")));
+                row.createCell(7).setCellValue(numValue(item.get("forecast_pending_qty")));
+                row.createCell(8).setCellValue(numValue(item.get("forecast_confirmed_qty")));
 
-                Integer status = item.get("supplier_order_status") != null ? ((Number) item.get("supplier_order_status")).intValue() : 0;
+                Integer status = 0;
+                Object statusObj = item.get("supplier_order_status");
+                if (statusObj instanceof Number ns) {
+                    status = ns.intValue();
+                } else if (statusObj instanceof String ss && !ss.isEmpty()) {
+                    try { status = Integer.parseInt(ss.trim()); } catch (NumberFormatException ignored) {}
+                }
                 String statusText = switch (status) {
                     case 20 -> "已确认";
                     case 21 -> "部分确认";
                     default -> "待确认";
                 };
-                row.createCell(6).setCellValue(statusText);
+                row.createCell(9).setCellValue(statusText);
 
                 for (int i = 0; i < headers.length; i++) {
                     row.getCell(i).setCellStyle(dataStyle);
                 }
             }
 
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
+            // 不使用 autoSizeColumn：在无字体子系统的容器里它会触发 FontManagerFactory 初始化并报错。
+            // 直接用固定列宽，避免任何 AWT 字体调用。
+            int[] columnWidths = {20, 18, 30, 14, 14, 30, 12, 12, 12, 12};
+            for (int i = 0; i < columnWidths.length; i++) {
+                sheet.setColumnWidth(i, columnWidths[i] * 256);
             }
 
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+
+    private static String strValue(Object v) {
+        return v != null ? v.toString() : "";
+    }
+
+    private static double numValue(Object v) {
+        if (v == null) return 0;
+        if (v instanceof Number n) return n.doubleValue();
+        if (v instanceof String s) {
+            s = s.trim();
+            if (s.isEmpty()) return 0;
+            try {
+                return Double.parseDouble(s);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     @GetMapping("/jit-orders")

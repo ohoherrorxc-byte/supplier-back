@@ -837,28 +837,28 @@
         </if>
     </select>
 
-    <!-- 导出采购计划列表（无分页） -->
+    <!-- 导出采购计划列表（无分页）按物料明细行输出 -->
     <select id="listPurchasePlanForExport" resultType="map">
         SELECT
             o.id AS order_id,
             o.order_no AS order_no,
+            d.id AS detail_id,
+            d.parts_number AS parts_number,
+            d.parts_name AS parts_name,
+            DATE_FORMAT(d.need_date, '%Y-%m-%d') AS plan_period,
             DATE_FORMAT(o.create_time, '%Y-%m-%d') AS forecast_release_date,
             s.SUPPLIER_NAME AS supplier_name,
-            CASE
-                WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
-                WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
-                ELSE 21
-            END AS supplier_order_status,
-            COALESCE(SUM(d.need_number), 0) AS forecast_total_qty,
-            COALESCE(SUM(CASE WHEN d.supplier_order_status = 0 THEN d.need_number ELSE 0 END), 0) AS forecast_pending_qty,
-            COALESCE(SUM(CASE WHEN d.supplier_order_status = 20 THEN d.need_number ELSE 0 END), 0) AS forecast_confirmed_qty
+            d.need_number AS forecast_total_qty,
+            CASE WHEN IFNULL(d.supplier_order_status, 0) = 0 THEN d.need_number ELSE 0 END AS forecast_pending_qty,
+            CASE WHEN IFNULL(d.supplier_order_status, 0) = 20 THEN d.need_number ELSE 0 END AS forecast_confirmed_qty,
+            d.supplier_order_status
         FROM tb_purchase_parts_order_detail d
         INNER JOIN tb_purchase_parts_order o ON d.order_id = o.id
         LEFT JOIN tb_contract_supplier s ON o.supplier_id = s.ID
         WHERE IFNULL(d.is_deleted, 0) = 0
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
-          AND o.cover_predict_status = 2
+          AND (o.cover_predict_status IS NULL OR o.cover_predict_status != 2)
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -883,17 +883,9 @@
             AND d.need_date &lt; DATE_ADD(CONCAT(#{endDate}, '-01'), INTERVAL 1 MONTH)
         </if>
         <if test="supplierOrderStatus != null and supplierOrderStatus != ''">
-            AND (
-                SELECT CASE
-                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 0 THEN 1 ELSE 0 END) THEN 0
-                    WHEN COUNT(*) = SUM(CASE WHEN d.supplier_order_status = 20 THEN 1 ELSE 0 END) THEN 20
-                    WHEN SUM(CASE WHEN d.supplier_order_status IN (25, 30) THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) > 0 THEN 30
-                    ELSE 21
-                END
-            ) = CAST(#{supplierOrderStatus} AS UNSIGNED)
+            AND IFNULL(d.supplier_order_status, 0) = CAST(#{supplierOrderStatus} AS UNSIGNED)
         </if>
-        GROUP BY o.order_no, o.create_time, s.SUPPLIER_NAME
-        ORDER BY o.create_time DESC
+        ORDER BY o.create_time DESC, o.order_no, d.parts_number
     </select>
 
     <!-- 查询 JIT 订单列表 -->
