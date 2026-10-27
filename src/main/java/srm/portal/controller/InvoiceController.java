@@ -40,6 +40,7 @@ public class InvoiceController {
             @RequestParam(required = false) String supplierNo,
             @RequestParam(required = false) Boolean isAdmin,
             @RequestParam(required = false) String acceptApplyNo,
+            @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String partsNo,
             @RequestParam(required = false) String partsName,
             @RequestParam(defaultValue = "10") int pageSize,
@@ -54,21 +55,35 @@ public class InvoiceController {
             if (isAdmin == null && userId != null) {
                 adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
             }
+            acceptApplyNo = blankToNull(acceptApplyNo);
+            orderNo = blankToNull(orderNo);
+            partsNo = blankToNull(partsNo);
+            partsName = blankToNull(partsName);
             int offset = (pageNum - 1) * pageSize;
+
+            long total = invoiceMapper.countPendingInvoiceGeneralFiltered(
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag);
+
+            PendingInvoiceResponse resp = new PendingInvoiceResponse();
+            resp.setTotal(total);
+            if (total == 0) {
+                resp.setItems(java.util.List.of());
+                return ResponseEntity.ok(resp);
+            }
 
             // 先按验收单号分页查询（不查明细）
             List<String> applyNos = invoiceMapper.listPendingInvoiceGeneralByPage(
-                supplierNo, acceptApplyNo, partsNo, partsName, adminFlag, pageSize, offset);
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, pageSize, offset);
 
-            // 根据验收单号列表查询所有明细
+            // 没查到单号时不能回退成全量，否则搜索会看起来失效
+            if (applyNos == null || applyNos.isEmpty()) {
+                resp.setItems(java.util.List.of());
+                return ResponseEntity.ok(resp);
+            }
+
             List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceGeneralByAcceptApplyNosSimple(
                 supplierNo, adminFlag, applyNos);
-
-            // 总数使用专门的数量统计查询
-            long total = invoiceMapper.countPendingInvoiceGeneral(supplierNo, adminFlag);
-            PendingInvoiceResponse resp = new PendingInvoiceResponse();
             resp.setItems(items);
-            resp.setTotal(total);
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             e.printStackTrace();
@@ -77,7 +92,7 @@ public class InvoiceController {
     }
 
     /**
-     * 查询待开票清单 - BOM采购（按验收单号分页，同一验收单不会被拆散）
+     * 查询待开票清单 - BOM采购（按明细行分页；生成结算单时再按验收单号拉全量明细）
      */
     @GetMapping("/pending/bom")
     public ResponseEntity<PendingInvoiceResponse> listPendingInvoiceBom(
@@ -101,16 +116,26 @@ public class InvoiceController {
                 adminFlag = Boolean.TRUE.equals(invoiceMapper.isAdminUser(userId));
             }
             int offset = (pageNum - 1) * pageSize;
+            acceptApplyNo = blankToNull(acceptApplyNo);
+            orderNo = blankToNull(orderNo);
+            partsNo = blankToNull(partsNo);
+            partsName = blankToNull(partsName);
+            if (supplierNo != null && supplierNo.isBlank()) {
+                supplierNo = null;
+            }
 
-            // 直接查询明细（SQL内部分页，同一验收单不会被拆散）
+            long total = invoiceMapper.countPendingInvoiceBomDetailsFiltered(
+                supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag);
+            PendingInvoiceResponse resp = new PendingInvoiceResponse();
+            resp.setTotal(total);
+            if (total == 0) {
+                resp.setItems(java.util.List.of());
+                return ResponseEntity.ok(resp);
+            }
+
             List<PendingInvoiceItem> items = invoiceMapper.listPendingInvoiceBomByPage(
                 supplierNo, acceptApplyNo, orderNo, partsNo, partsName, adminFlag, pageSize, offset);
-
-            // 总数使用专门的数量统计查询
-            long total = invoiceMapper.countPendingInvoiceBomDetails(supplierNo, adminFlag);
-            PendingInvoiceResponse resp = new PendingInvoiceResponse();
-            resp.setItems(items);
-            resp.setTotal(total);
+            resp.setItems(items == null ? java.util.List.of() : items);
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             e.printStackTrace();
@@ -121,6 +146,14 @@ public class InvoiceController {
     /**
      * 获取供应商编号（根据用户ID）
      */
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private String getSupplierNoByUserId(Long userId) {
         Long supplierId = invoiceMapper.findSupplierCompanyIdByUserId(userId);
         if (supplierId == null) {
@@ -246,6 +279,11 @@ public class InvoiceController {
                 return ResponseEntity.badRequest().body(Map.of("message", "请选择要结算的明细"));
             }
 
+            String usedInvoiceMessage = usedInvoiceMessage(req.getInvoiceLines());
+            if (usedInvoiceMessage != null) {
+                return ResponseEntity.badRequest().body(Map.of("message", usedInvoiceMessage));
+            }
+
             // 汇总发票数据
             BigDecimal sumTaxAmount = BigDecimal.ZERO;
             BigDecimal sumAmount = BigDecimal.ZERO;
@@ -263,6 +301,12 @@ public class InvoiceController {
             final BigDecimal totalTaxAmount = sumTaxAmount;
             final BigDecimal totalAmount = sumAmount;
             final BigDecimal taxRate = sumTaxRate;
+            String lineCurrency = "RMB";
+            if (invoiceLines != null && !invoiceLines.isEmpty() && invoiceLines.get(0).getCurrency() != null
+                    && !invoiceLines.get(0).getCurrency().isBlank()) {
+                lineCurrency = invoiceLines.get(0).getCurrency();
+            }
+            final String settlementCurrency = lineCurrency;
 
             // 验收明细ID转JSON字符串
             String acceptDetailIdsJson;
@@ -297,7 +341,8 @@ public class InvoiceController {
                     userId,
                     req.getCreateDept(),
                     detailIdsJson,
-                    acceptApplyNo
+                    acceptApplyNo,
+                    settlementCurrency
                 );
 
                 long settlementId = invoiceMapper.getLastInsertId();
@@ -336,6 +381,7 @@ public class InvoiceController {
                         line.setAcceptApplyNo(reqLine.getAcceptApplyNo());
                         line.setQuantity(reqLine.getQuantity());
                         line.setUnit(reqLine.getUnit());
+                        line.setCurrency(reqLine.getCurrency());
                         invoiceMapper.insertSettlementInvoiceLine(line);
                     }
                 }
@@ -403,7 +449,8 @@ public class InvoiceController {
 
         List<SettlementOrderItem> items = invoiceMapper.listSettlementOrders(
             supplierNo, settlementNo, status, acceptApplyNo, bomOrderNo, contractNo, pageSize, offset);
-        long total = invoiceMapper.countSettlementOrders(supplierNo);
+        long total = invoiceMapper.countSettlementOrdersFiltered(
+            supplierNo, settlementNo, status, acceptApplyNo, bomOrderNo, contractNo);
 
         SettlementOrderResponse resp = new SettlementOrderResponse();
         resp.setItems(items);
@@ -461,6 +508,55 @@ public class InvoiceController {
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("success", false, "message", "删除失败: " + e.getMessage()));
         }
+    }
+
+    /**
+     * 按发票号检查是否已被未删除结算单使用。
+     */
+    @PostMapping("/settlement/check-invoice")
+    public ResponseEntity<Map<String, Object>> checkUsedInvoice(@RequestBody List<String> invoiceNos) {
+        String message = usedInvoiceMessageFromNos(invoiceNos);
+        if (message != null) {
+            return ResponseEntity.ok(Map.of("used", true, "message", message));
+        }
+        return ResponseEntity.ok(Map.of("used", false));
+    }
+
+    private String usedInvoiceMessage(List<SettlementInvoiceLineRequest> invoiceLines) {
+        if (invoiceLines == null || invoiceLines.isEmpty()) {
+            return null;
+        }
+        List<String> nos = new java.util.ArrayList<>();
+        for (SettlementInvoiceLineRequest line : invoiceLines) {
+            if (line.getInvoiceNo() != null) {
+                nos.add(line.getInvoiceNo());
+            }
+        }
+        return usedInvoiceMessageFromNos(nos);
+    }
+
+    private String usedInvoiceMessageFromNos(List<String> invoiceNos) {
+        if (invoiceNos == null || invoiceNos.isEmpty()) {
+            return null;
+        }
+        java.util.LinkedHashSet<String> distinct = new java.util.LinkedHashSet<>();
+        for (String no : invoiceNos) {
+            if (no == null) {
+                continue;
+            }
+            String normalized = no.replace(" ", "").replace("　", "").trim();
+            if (!normalized.isEmpty()) {
+                distinct.add(normalized);
+            }
+        }
+        if (distinct.isEmpty()) {
+            return null;
+        }
+        List<String> used = invoiceMapper.findUsedInvoiceNos(new java.util.ArrayList<>(distinct));
+        if (used == null || used.isEmpty()) {
+            return null;
+        }
+        return "发票" + String.join("、", used) + "已经使用过了，不可重复提交";
     }
 
     /**

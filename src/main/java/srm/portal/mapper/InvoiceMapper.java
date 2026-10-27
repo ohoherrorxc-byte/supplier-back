@@ -14,6 +14,7 @@ public interface InvoiceMapper {
     List<String> listPendingInvoiceGeneralByPage(
             @Param("supplierNo") String supplierNo,
             @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("orderNo") String orderNo,
             @Param("partsNo") String partsNo,
             @Param("partsName") String partsName,
             @Param("isAdmin") boolean isAdmin,
@@ -46,6 +47,18 @@ public interface InvoiceMapper {
      * 统计待开票清单 - 一般采购（按验收单号去重）
      */
     long countPendingInvoiceGeneral(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
+
+    /**
+     * 统计待开票清单 - 一般采购，带搜索条件（按验收单号去重）
+     */
+    long countPendingInvoiceGeneralFiltered(
+            @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("orderNo") String orderNo,
+            @Param("partsNo") String partsNo,
+            @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin
+    );
 
     /**
      * 获取待确认订单号列表（分页）
@@ -81,7 +94,7 @@ public interface InvoiceMapper {
     );
 
     /**
-     * 查询待开票清单 - BOM采购（一次查询，分页+同一验收单不被拆散）
+     * 查询待开票清单 - BOM采购（按明细行分页）
      */
     List<PendingInvoiceItem> listPendingInvoiceBomByPage(
             @Param("supplierNo") String supplierNo,
@@ -127,6 +140,18 @@ public interface InvoiceMapper {
     long countPendingInvoiceBomDetails(@Param("supplierNo") String supplierNo, @Param("isAdmin") boolean isAdmin);
 
     /**
+     * 统计待开票明细行数 - BOM采购，带搜索条件
+     */
+    long countPendingInvoiceBomDetailsFiltered(
+            @Param("supplierNo") String supplierNo,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("orderNo") String orderNo,
+            @Param("partsNo") String partsNo,
+            @Param("partsName") String partsName,
+            @Param("isAdmin") boolean isAdmin
+    );
+
+    /**
      * 创建结算单
      */
     void insertSettlementOrder(@Param("settlementNo") String settlementNo,
@@ -140,7 +165,8 @@ public interface InvoiceMapper {
                                @Param("createUser") Long createUser,
                                @Param("createDept") String createDept,
                                @Param("acceptDetailIds") String acceptDetailIds,
-                               @Param("acceptApplyNo") String acceptApplyNo);
+                               @Param("acceptApplyNo") String acceptApplyNo,
+                               @Param("currency") String currency);
 
     /**
      * 获取刚插入的结算单ID
@@ -165,6 +191,18 @@ public interface InvoiceMapper {
      * 统计结算单数量
      */
     long countSettlementOrders(@Param("supplierNo") String supplierNo);
+
+    /**
+     * 统计结算单数量，过滤条件与列表查询一致。
+     */
+    long countSettlementOrdersFiltered(
+            @Param("supplierNo") String supplierNo,
+            @Param("settlementNo") String settlementNo,
+            @Param("status") Integer status,
+            @Param("acceptApplyNo") String acceptApplyNo,
+            @Param("bomOrderNo") String bomOrderNo,
+            @Param("contractNo") String contractNo
+    );
 
     /**
      * 查询供应商编号（根据供应商ID）
@@ -220,6 +258,11 @@ public interface InvoiceMapper {
      * 检查是否有已提交/已结算/已付款的结算单包含指定验收明细
      */
     List<Map<String, Object>> findSubmittedSettlements(@Param("acceptDetailIds") List<Long> acceptDetailIds);
+
+    /**
+     * 查询已被未删除结算单使用过的发票号
+     */
+    List<String> findUsedInvoiceNos(@Param("invoiceNos") List<String> invoiceNos);
 
     /**
      * 获取结算单的完工单附件

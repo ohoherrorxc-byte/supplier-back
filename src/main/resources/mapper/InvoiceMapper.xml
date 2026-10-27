@@ -14,6 +14,8 @@
         <result property="unitName" column="unit_name"/>
         <result property="quantity" column="quantity"/>
         <result property="amount" column="amount"/>
+        <result property="originalAmount" column="original_amount"/>
+        <result property="currency" column="currency"/>
         <result property="acceptCategory" column="accept_category"/>
         <result property="acceptStatus" column="accept_status"/>
         <result property="supplierNo" column="supplier_no"/>
@@ -23,6 +25,8 @@
         <result property="acceptDate" column="accept_date"/>
         <result property="projectName" column="project_name"/>
         <result property="purchaseOrderType" column="purchase_order_type"/>
+        <result property="acceptAmountRmb" column="accept_amount_rmb"/>
+        <result property="acceptAmountOriginal" column="accept_amount_original"/>
     </resultMap>
 
     <!-- 结算单项 ResultMap -->
@@ -52,6 +56,8 @@
         <result property="quantity" column="quantity"/>
         <result property="unitPrice" column="unit_price"/>
         <result property="amount" column="amount"/>
+        <result property="originalAmount" column="original_amount"/>
+        <result property="currency" column="currency"/>
         <result property="taxRate" column="tax_rate"/>
         <result property="taxAmount" column="tax_amount"/>
         <result property="totalAmount" column="total_amount"/>
@@ -85,6 +91,9 @@
           <if test="acceptApplyNo != null and acceptApplyNo != ''">
               AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
           </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.PURCHASE_CONTRACT_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
           <if test="partsNo != null and partsNo != ''">
               AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
           </if>
@@ -106,6 +115,8 @@
                d.UNIT_NAME AS unit_name,
                d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency,
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                pc.SUPPLIER_NO AS supplier_no,
@@ -168,6 +179,8 @@
                d.UNIT_NAME AS unit_name,
                d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency,
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                bc.SUPPLIER_NO AS supplier_no,
@@ -182,7 +195,7 @@
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
+        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0 AND pd.PARTS_NO = d.PARTS_NO
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
         WHERE a.STATUS = 1
@@ -227,6 +240,8 @@
                d.UNIT_NAME AS unit_name,
                d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency,
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                bc.SUPPLIER_NO AS supplier_no,
@@ -236,12 +251,14 @@
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
                a.PROCESS_INSTANCE_ID AS process_instance_id,
                pd.PROJECT_NAME AS project_name,
-               po.PURCHASE_ORDER_TYPE AS purchase_order_type
+               po.PURCHASE_ORDER_TYPE AS purchase_order_type,
+               a.ACCEPT_AMOUNT_RMB AS accept_amount_rmb,
+               a.ACCEPT_AMOUNT_ORIGINAL AS accept_amount_original
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
+        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0 AND pd.PARTS_NO = d.PARTS_NO
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
         WHERE a.STATUS = 1
@@ -274,6 +291,8 @@
                d.UNIT_NAME AS unit_name,
                d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency,
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                pc.SUPPLIER_NO AS supplier_no,
@@ -283,7 +302,9 @@
                COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
                a.PROCESS_INSTANCE_ID AS process_instance_id,
                pcd.PROJECT_NAME AS project_name,
-               pc.PURCHASE_ORDER_TYPE AS purchase_order_type
+               pc.PURCHASE_ORDER_TYPE AS purchase_order_type,
+               a.ACCEPT_AMOUNT_RMB AS accept_amount_rmb,
+               a.ACCEPT_AMOUNT_ORIGINAL AS accept_amount_original
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
@@ -335,46 +356,110 @@
           </if>
     </select>
 
-    <!-- 查询待开票清单 - BOM采购（一次查询，分页+同一验收单不被拆散） -->
-    <select id="listPendingInvoiceBomByPage" resultMap="PendingInvoiceItemResultMap">
-        SELECT DISTINCT d.ID AS accept_detail_id,
-               a.APPLY_NO AS accept_apply_no,
-               a.DOC_TITLE AS doc_title,
-               d.PARTS_NO AS parts_no,
-               d.PARTS_NAME AS parts_name,
-               d.REMARK AS remark,
-               d.UNIT_NAME AS unit_name,
-               d.QUANTITY AS quantity,
-               d.TOTAL_PRICE_RMB AS amount,
-               a.ACCEPT_CATEGORY AS accept_category,
-               a.STATUS AS accept_status,
-               bc.SUPPLIER_NO AS supplier_no,
-               bc.SUPPLIER_NAME AS supplier_name,
-               a.BOM_PURCHASE_ORDER_NO AS contract_no,
-               a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
-               COALESCE(hp.END_TIME_, a.CREATE_TIME) AS accept_date,
-               a.PROCESS_INSTANCE_ID AS process_instance_id,
-               pd.PROJECT_NAME AS project_name,
-               po.PURCHASE_ORDER_TYPE AS purchase_order_type
+    <select id="countPendingInvoiceGeneralFiltered" resultType="long">
+        SELECT COUNT(DISTINCT a.APPLY_NO)
         FROM tb_accept_apply_detail d
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
-        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
-        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
-        LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
-        LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+        INNER JOIN tb_purchase_contract pc ON a.PURCHASE_CONTRACT_NO = pc.APPLY_NO
         WHERE a.STATUS = 1
-          AND a.ACCEPT_CATEGORY = 2
+          AND a.ACCEPT_CATEGORY = 1
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
-          AND bc.IS_DELETED = 0
-          AND bcp.ACCEPT_APPLY_NO IS NULL
-          AND hp.END_TIME_ IS NOT NULL
+          AND pc.IS_DELETED = 0
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_purchase_contract_pay pcp
+              WHERE pcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(pcp.IS_DELETED, 0) = 0
+          )
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order so
               WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
           )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND pc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.PURCHASE_CONTRACT_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
+          </if>
+    </select>
+
+    <!-- 查询待开票清单 - BOM采购（按明细行分页） -->
+    <select id="listPendingInvoiceBomByPage" resultMap="PendingInvoiceItemResultMap">
+        SELECT t.accept_detail_id,
+               t.accept_apply_no,
+               t.doc_title,
+               t.parts_no,
+               t.parts_name,
+               t.remark,
+               t.unit_name,
+               t.quantity,
+               t.amount,
+               t.original_amount,
+               t.currency,
+               t.accept_category,
+               t.accept_status,
+               t.supplier_no,
+               t.supplier_name,
+               t.contract_no,
+               t.contract_name,
+               COALESCE(hp.END_TIME_, t.create_time) AS accept_date,
+               t.process_instance_id,
+               t.project_name,
+               t.purchase_order_type
+        FROM (
+            SELECT d.ID AS accept_detail_id,
+                   a.APPLY_NO AS accept_apply_no,
+                   a.DOC_TITLE AS doc_title,
+                   d.PARTS_NO AS parts_no,
+                   d.PARTS_NAME AS parts_name,
+                   d.REMARK AS remark,
+                   d.UNIT_NAME AS unit_name,
+                   d.QUANTITY AS quantity,
+                   d.TOTAL_PRICE_RMB AS amount,
+                   d.TOTAL_PRICE_ORIGINAL AS original_amount,
+                   a.CURRENCY AS currency,
+                   a.ACCEPT_CATEGORY AS accept_category,
+                   a.STATUS AS accept_status,
+                   bc.SUPPLIER_NO AS supplier_no,
+                   bc.SUPPLIER_NAME AS supplier_name,
+                   a.BOM_PURCHASE_ORDER_NO AS contract_no,
+                   a.BOM_PURCHASE_CONTRACT_NAME AS contract_name,
+                   a.CREATE_TIME AS create_time,
+                   a.PROCESS_INSTANCE_ID AS process_instance_id,
+                   (SELECT pd.PROJECT_NAME
+                    FROM tb_bom_purchase_order_detail pd
+                    WHERE pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO
+                      AND pd.IS_DELETED = 0
+                      AND pd.PARTS_NO = d.PARTS_NO
+                    LIMIT 1) AS project_name,
+                   po.PURCHASE_ORDER_TYPE AS purchase_order_type
+            FROM tb_accept_apply_detail d
+            INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+            INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+            INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+            WHERE a.STATUS = 1
+              AND a.ACCEPT_CATEGORY = 2
+              AND d.IS_DELETED = 0
+              AND a.IS_DELETED = 0
+              AND bc.IS_DELETED = 0
+              AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+              AND NOT EXISTS (
+                  SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+                  WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM tb_settlement_order so
+                  WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+              )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
           </if>
@@ -390,9 +475,10 @@
           <if test="partsName != null and partsName != ''">
               AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
-
-        ORDER BY a.APPLY_NO DESC, d.ID ASC
-        LIMIT #{limit} OFFSET #{offset}
+            ORDER BY a.APPLY_NO DESC, d.ID ASC
+            LIMIT #{limit} OFFSET #{offset}
+        ) t
+        LEFT JOIN `ACT_HI_PROCINST` hp ON t.process_instance_id = hp.`PROC_INST_ID_`
     </select>
 
     <!-- 根据验收单号列表查询待开票明细 - BOM采购（带验收单号过滤） -->
@@ -406,6 +492,8 @@
                d.UNIT_NAME AS unit_name,
                d.QUANTITY AS quantity,
                d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency,
                a.ACCEPT_CATEGORY AS accept_category,
                a.STATUS AS accept_status,
                bc.SUPPLIER_NO AS supplier_no,
@@ -420,7 +508,7 @@
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0
+        LEFT JOIN tb_bom_purchase_order_detail pd ON pd.BOM_PURCHASE_ORDER_NO = a.BOM_PURCHASE_ORDER_NO AND pd.IS_DELETED = 0 AND pd.PARTS_NO = d.PARTS_NO
         LEFT JOIN `ACT_HI_PROCINST` hp ON a.PROCESS_INSTANCE_ID = hp.`PROC_INST_ID_`
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
@@ -467,14 +555,16 @@
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND bcp.ACCEPT_APPLY_NO IS NULL
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
           AND NOT EXISTS (
               SELECT 1 FROM tb_settlement_order so
               WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
@@ -491,17 +581,59 @@
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
         INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
         INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
-        LEFT JOIN tb_bom_purchase_contract_pay bcp ON bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
         WHERE a.STATUS = 1
           AND a.ACCEPT_CATEGORY = 2
           AND d.IS_DELETED = 0
           AND a.IS_DELETED = 0
           AND bc.IS_DELETED = 0
-          AND bcp.ACCEPT_APPLY_NO IS NULL
-
           AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
           <if test="supplierNo != null and supplierNo != ''">
               AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+    </select>
+
+    <select id="countPendingInvoiceBomDetailsFiltered" resultType="long">
+        SELECT COUNT(*)
+        FROM tb_accept_apply_detail d
+        INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
+        INNER JOIN tb_bom_purchase_contract bc ON a.BOM_PURCHASE_CONTRACT_NO = bc.APPLY_NO
+        INNER JOIN tb_bom_purchase_order po ON a.BOM_PURCHASE_ORDER_NO = po.APPLY_NO AND po.IS_DELETED = 0
+        WHERE a.STATUS = 1
+          AND a.ACCEPT_CATEGORY = 2
+          AND d.IS_DELETED = 0
+          AND a.IS_DELETED = 0
+          AND bc.IS_DELETED = 0
+          AND (a.SEND_SUPPLIER = 1 OR #{isAdmin} = true)
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_bom_purchase_contract_pay bcp
+              WHERE bcp.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(bcp.IS_DELETED, 0) = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM tb_settlement_order so
+              WHERE so.ACCEPT_APPLY_NO = a.APPLY_NO AND IFNULL(so.IS_DELETED, 0) = 0 AND IFNULL(so.STATUS, 0) > 0
+          )
+          <if test="supplierNo != null and supplierNo != ''">
+              AND bc.SUPPLIER_NO = #{supplierNo}
+          </if>
+          <if test="acceptApplyNo != null and acceptApplyNo != ''">
+              AND a.APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+          </if>
+          <if test="orderNo != null and orderNo != ''">
+              AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{orderNo}, '%')
+          </if>
+          <if test="partsNo != null and partsNo != ''">
+              AND d.PARTS_NO LIKE CONCAT('%', #{partsNo}, '%')
+          </if>
+          <if test="partsName != null and partsName != ''">
+              AND d.PARTS_NAME LIKE CONCAT('%', #{partsName}, '%')
           </if>
     </select>
 
@@ -591,11 +723,11 @@
         INSERT INTO tb_settlement_order (
             SETTLEMENT_NO, supplier_no, supplier_name,
             INVOICE_AMOUNT, INVOICE_TAX_RATE, INVOICE_TAX_AMOUNT, INVOICE_TOTAL_AMOUNT,
-            remark, STATUS, CREATE_USER, CREATE_DEPT, ACCEPT_DETAIL_IDS, ACCEPT_APPLY_NO
+            remark, STATUS, CREATE_USER, CREATE_DEPT, ACCEPT_DETAIL_IDS, ACCEPT_APPLY_NO, CURRENCY
         ) VALUES (
             #{settlementNo}, #{supplierNo}, #{supplierName},
             #{invoiceAmount}, #{invoiceTaxRate}, #{invoiceTaxAmount}, #{invoiceTotalAmount},
-            #{remark}, 0, #{createUser}, #{createDept}, #{acceptDetailIds}, #{acceptApplyNo}
+            #{remark}, 0, #{createUser}, #{createDept}, #{acceptDetailIds}, #{acceptApplyNo}, #{currency}
         )
     </insert>
 
@@ -665,6 +797,31 @@
         </if>
     </select>
 
+    <select id="countSettlementOrdersFiltered" resultType="long">
+        SELECT COUNT(DISTINCT s.ID)
+        FROM tb_settlement_order s
+        LEFT JOIN tb_accept_apply a ON s.ACCEPT_APPLY_NO = a.APPLY_NO AND a.IS_DELETED = 0
+        WHERE s.IS_DELETED = 0
+        <if test="supplierNo != null and supplierNo != ''">
+            AND s.supplier_no = #{supplierNo}
+        </if>
+        <if test="settlementNo != null and settlementNo != ''">
+            AND s.SETTLEMENT_NO LIKE CONCAT('%', #{settlementNo}, '%')
+        </if>
+        <if test="status != null">
+            AND s.STATUS = #{status}
+        </if>
+        <if test="acceptApplyNo != null and acceptApplyNo != ''">
+            AND s.ACCEPT_APPLY_NO LIKE CONCAT('%', #{acceptApplyNo}, '%')
+        </if>
+        <if test="bomOrderNo != null and bomOrderNo != ''">
+            AND a.BOM_PURCHASE_ORDER_NO LIKE CONCAT('%', #{bomOrderNo}, '%')
+        </if>
+        <if test="contractNo != null and contractNo != ''">
+            AND (a.PURCHASE_CONTRACT_NO LIKE CONCAT('%', #{contractNo}, '%') OR a.BOM_PURCHASE_CONTRACT_NO LIKE CONCAT('%', #{contractNo}, '%'))
+        </if>
+    </select>
+
     <!-- 查询供应商编号（根据供应商ID） -->
     <select id="getSupplierNoBySupplierId" resultType="string">
         SELECT SUPPLIER_NO FROM tb_contract_supplier
@@ -731,7 +888,9 @@
     <select id="getSettlementDetails" resultMap="SettlementDetailItemResultMap">
         SELECT d.ID AS id, d.ID AS accept_detail_id, d.PARTS_NO AS parts_no,
                d.PARTS_NAME AS parts_name, d.REMARK AS remark, d.UNIT_NAME AS unit, d.QUANTITY AS quantity,
-               d.TOTAL_PRICE_RMB AS amount, a.APPLY_NO AS accept_apply_no
+               d.TOTAL_PRICE_RMB AS amount,
+               d.TOTAL_PRICE_ORIGINAL AS original_amount,
+               a.CURRENCY AS currency, a.APPLY_NO AS accept_apply_no
         FROM tb_settlement_order s
         INNER JOIN tb_accept_apply_detail d ON JSON_CONTAINS(s.ACCEPT_DETAIL_IDS, CAST(d.ID AS JSON))
         INNER JOIN tb_accept_apply a ON d.ACCEPT_APPLY_NO = a.APPLY_NO
@@ -760,6 +919,19 @@
                 OR ACCEPT_DETAIL_IDS LIKE CONCAT('%[', #{id}, ']%')
             </foreach>
           )
+    </select>
+
+    <!-- 发票号是否已被未删除的结算单使用（忽略空格） -->
+    <select id="findUsedInvoiceNos" resultType="string">
+        SELECT DISTINCT REPLACE(REPLACE(TRIM(l.INVOICE_NO), ' ', ''), '　', '') AS invoiceNo
+        FROM tb_settlement_invoice_line l
+        INNER JOIN tb_settlement_order s ON s.ID = l.SETTLEMENT_ID AND IFNULL(s.IS_DELETED, 0) = 0
+        WHERE IFNULL(l.IS_DELETED, 0) = 0
+          AND l.INVOICE_NO IS NOT NULL
+          AND REPLACE(REPLACE(TRIM(l.INVOICE_NO), ' ', ''), '　', '') IN
+          <foreach collection="invoiceNos" item="no" open="(" separator="," close=")">
+              #{no}
+          </foreach>
     </select>
 
     <select id="findSubmittedSettlements" resultType="map">

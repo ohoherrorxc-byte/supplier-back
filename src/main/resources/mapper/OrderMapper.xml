@@ -633,6 +633,21 @@
         </if>
     </select>
 
+    <!-- 同一供应商在需求到货月份已有正式订单时，不再展示该月预测 -->
+    <sql id="hideForecastWhenSupplierHasOrderSameMonth">
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tb_purchase_parts_order ord
+            INNER JOIN tb_purchase_parts_order_detail ord_d
+                ON ord_d.order_id = ord.id AND IFNULL(ord_d.is_deleted, 0) = 0
+            WHERE IFNULL(ord.is_deleted, 0) = 0
+              AND ord.require_attr = '订单'
+              AND ord.order_status = 1
+              AND ord.supplier_id = o.supplier_id
+              AND DATE_FORMAT(ord_d.need_date, '%Y-%m') = DATE_FORMAT(d.need_date, '%Y-%m')
+        )
+    </sql>
+
     <!-- 查询采购计划列表 -->
     <select id="listPurchasePlan" resultType="map">
         SELECT
@@ -656,6 +671,7 @@
           AND o.require_attr = '预测'
           AND o.cover_predict_status != 2
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
+          <include refid="hideForecastWhenSupplierHasOrderSameMonth"/>
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
         </if>
@@ -702,6 +718,7 @@
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
           AND o.cover_predict_status != 2
+          <include refid="hideForecastWhenSupplierHasOrderSameMonth"/>
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -742,7 +759,7 @@
         SELECT
             o.id AS order_id,
             o.order_no AS order_no,
-            d.id AS detail_id,
+            CAST(d.id AS CHAR) AS detail_id,
             d.parts_number AS parts_number,
             d.parts_name,
             DATE_FORMAT(d.need_date, '%Y-%m-%d') AS plan_period,
@@ -756,6 +773,7 @@
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
           AND o.cover_predict_status != 2
+          <include refid="hideForecastWhenSupplierHasOrderSameMonth"/>
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -802,6 +820,7 @@
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
           AND o.cover_predict_status != 2
+          <include refid="hideForecastWhenSupplierHasOrderSameMonth"/>
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
@@ -859,16 +878,22 @@
           AND IFNULL(o.is_deleted, 0) = 0
           AND o.require_attr = '预测'
           AND (o.cover_predict_status IS NULL OR o.cover_predict_status != 2)
+          <include refid="hideForecastWhenSupplierHasOrderSameMonth"/>
           AND d.need_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 12 MONTH)
         <if test="supplierId != null">
           AND o.supplier_id = #{supplierId}
         </if>
         <if test="orderNo != null and orderNo.size() > 0">
-            AND (
-                <foreach collection="orderNo" item="on" open="(" separator=" OR " close=")">
-                    o.order_no LIKE CONCAT('%', #{on}, '%')
-                </foreach>
-            )
+            AND o.order_no IN
+            <foreach collection="orderNo" item="on" open="(" separator="," close=")">
+                #{on}
+            </foreach>
+        </if>
+        <if test="detailIds != null and detailIds.size() > 0">
+            AND CAST(d.id AS CHAR) IN
+            <foreach collection="detailIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
         </if>
         <if test="partsNumber != null and partsNumber.size() > 0">
             AND d.parts_number IN

@@ -18,6 +18,8 @@ public class PendingInvoiceItem {
     private String contractName;
     private BigDecimal quantity;
     private BigDecimal amount;
+    private BigDecimal originalAmount;
+    private String currency;
     private String supplierNo;
     private String supplierName;
     private LocalDateTime acceptDate;
@@ -26,6 +28,10 @@ public class PendingInvoiceItem {
     private Integer acceptStatus;
     private String projectName;
     private String purchaseOrderType;
+    /** 验收单人民币总金额（表头，非明细加总） */
+    private BigDecimal acceptAmountRmb;
+    /** 验收单原币总金额 */
+    private BigDecimal acceptAmountOriginal;
 
     public PendingInvoiceItem() {
     }
@@ -110,6 +116,22 @@ public class PendingInvoiceItem {
         this.amount = amount;
     }
 
+    public BigDecimal getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(BigDecimal originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
     public String getSupplierNo() {
         return supplierNo;
     }
@@ -172,5 +194,21 @@ public class PendingInvoiceItem {
 
     public void setPurchaseOrderType(String purchaseOrderType) {
         this.purchaseOrderType = purchaseOrderType;
+    }
+
+    public BigDecimal getAcceptAmountRmb() {
+        return acceptAmountRmb;
+    }
+
+    public void setAcceptAmountRmb(BigDecimal acceptAmountRmb) {
+        this.acceptAmountRmb = acceptAmountRmb;
+    }
+
+    public BigDecimal getAcceptAmountOriginal() {
+        return acceptAmountOriginal;
+    }
+
+    public void setAcceptAmountOriginal(BigDecimal acceptAmountOriginal) {
+        this.acceptAmountOriginal = acceptAmountOriginal;
     }
 }

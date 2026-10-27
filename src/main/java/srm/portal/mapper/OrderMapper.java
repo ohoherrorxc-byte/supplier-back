@@ -253,7 +253,8 @@ public interface OrderMapper {
             @Param("partsNumber") List<String> partsNumber,
             @Param("startDate") String startDate,
             @Param("endDate") String endDate,
-            @Param("supplierOrderStatus") String supplierOrderStatus
+            @Param("supplierOrderStatus") String supplierOrderStatus,
+            @Param("detailIds") List<String> detailIds
     );
 
     /**

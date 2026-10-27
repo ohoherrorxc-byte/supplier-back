@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -213,7 +215,8 @@ public class OrderManagementController {
             @RequestParam(required = false) List<String> partsNumber,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
-            @RequestParam(required = false) String supplierOrderStatus
+            @RequestParam(required = false) String supplierOrderStatus,
+            @RequestParam(required = false) List<String> detailIds
     ) {
         boolean isAdmin = lookupRepo.isAdminUser(String.valueOf(userId));
         Long supplierId = null;
@@ -227,7 +230,7 @@ public class OrderManagementController {
 
         try {
             List<Map<String, Object>> items = orderRepo.getOrderMapper().listPurchasePlanForExport(
-                    supplierId, orderNo, partsNumber, startDate, endDate, supplierOrderStatus
+                    supplierId, orderNo, partsNumber, startDate, endDate, supplierOrderStatus, detailIds
             );
 
             byte[] excelBytes = generatePurchasePlanExcel(items);
@@ -235,7 +238,8 @@ public class OrderManagementController {
             String filename = "采购计划导出_" + System.currentTimeMillis() + ".xlsx";
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-            headers.setContentDispositionFormData("attachment", filename);
+            // filename*=UTF-8''... 才能带中文；form-data 里的中文文件名会被 Tomcat 丢掉，响应写到一半就断，Excel 打开就是乱码。
+            headers.setContentDisposition(ContentDisposition.attachment().filename(filename, StandardCharsets.UTF_8).build());
 
             return ResponseEntity.ok().headers(headers).body(excelBytes);
         } catch (Exception ex) {
@@ -255,7 +259,7 @@ public class OrderManagementController {
 
             // 为样式显式指定一个内置字体，避免 POI 在某些无字体容器里隐式初始化字体导致崩溃。
             org.apache.poi.ss.usermodel.Font baseFont = workbook.createFont();
-            baseFont.setFontName("SansSerif");
+            baseFont.setFontName("宋体");
 
             CellStyle headerStyle = workbook.createCellStyle();
             headerStyle.setFont(baseFont);

@@ -17,6 +17,8 @@ public class SettlementDetailItem {
     private BigDecimal quantity;
     private BigDecimal unitPrice;
     private BigDecimal amount;
+    private BigDecimal originalAmount;
+    private String currency;
     private BigDecimal taxRate;
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
@@ -107,6 +109,22 @@ public class SettlementDetailItem {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public BigDecimal getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(BigDecimal originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 
     public BigDecimal getTaxRate() {
